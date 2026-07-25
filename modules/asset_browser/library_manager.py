@@ -253,7 +253,7 @@ def _show_packaging_popup(message, title, icon, target_window=None):
     except Exception as error:
         print(f"Could not show packaging popup: {error}")
 
-def _poll_library_packaging(game_name, process, log_stream, log_path, output_directory):
+def _poll_library_packaging(game_name, process, log_stream, log_path, output_directory, notification_window):
     return_code = process.poll()
 
     if return_code is None:
@@ -276,7 +276,7 @@ def _poll_library_packaging(game_name, process, log_stream, log_path, output_dir
         except OSError as error:
             print(f"Could not read packaging log: {error}")
 
-        _show_packaging_popup(f"Failed to package {game_name}. See packaging log.", "RE Asset Library Packaging", "ERROR")
+        _show_packaging_popup(f"Failed to package {game_name}. See packaging log.", "RE Asset Library Packaging", "ERROR", notification_window)
         return None
 
     package_path = output_directory / f"{game_name}.reassetlib"
@@ -289,7 +289,7 @@ def _poll_library_packaging(game_name, process, log_stream, log_path, output_dir
         directory_entry = _load_json_object(metadata_path)
     except (OSError, ValueError) as error:
         print(f"Background packaging output is invalid: {error}")
-        _show_packaging_popup(f"Packaging {game_name} produced invalid output." , "RE Asset Library Packaging", "ERROR")
+        _show_packaging_popup(f"Packaging {game_name} produced invalid output." , "RE Asset Library Packaging", "ERROR", notification_window)
         return None
 
     print(f"Created Asset Library package: {package_path}")
@@ -301,7 +301,7 @@ def _poll_library_packaging(game_name, process, log_stream, log_path, output_dir
     except Exception as error:
         print(f"Could not open packaging output folder: {error}")
 
-    _show_packaging_popup(f"Packaged {game_name} Asset Library.", "RE Asset Library Packaging", "INFO")
+    _show_packaging_popup(f"Packaged {game_name} Asset Library.", "RE Asset Library Packaging", "INFO", notification_window)
     return None
 
 def _validate_archive_member(member_name):
@@ -404,6 +404,7 @@ class WM_OT_CreateREAssetLibrary(Operator, ImportHelper):
     def execute(self, context):
         list_path = Path(bpy.path.abspath(self.filepath))
         game_name = self.game_name.strip().upper()
+        notification_window = context.window
         file_types = sorted({
             file_type.strip().lower()
             for file_type in self.file_types.split(",") if file_type.strip()
@@ -491,10 +492,10 @@ class WM_OT_CreateREAssetLibrary(Operator, ImportHelper):
 
             def initialization_succeeded():
                 print(f"Finished initializing the {game_name} Asset Library.")
-                _show_packaging_popup(f"Created and initialized the {game_name} Asset Library.", "RE Asset Library Initialization", "INFO")
+                _show_packaging_popup(f"Created and initialized the {game_name} Asset Library.", "RE Asset Library Initialization", "INFO", notification_window)
 
             def initialization_failed():
-                _show_packaging_popup(f"Failed to initialize {game_name}. See initialization log.", "RE Asset Library Initialization", "ERROR")
+                _show_packaging_popup(f"Failed to initialize {game_name}. See initialization log.", "RE Asset Library Initialization", "ERROR", notification_window)
 
             _watch_library_initialization(process, log_stream, log_path, initialization_succeeded, initialization_failed)
 
@@ -690,6 +691,7 @@ class WM_OT_ApplyREAssetLibraryUpdate(Operator):
 
     def execute(self, context):
         game_name = self.game_name.strip().upper()
+        notification_window = context.window
 
         if not re.fullmatch(r"[A-Z0-9_]+", game_name):
             self.report({"ERROR"}, "Game Name may only contain letters, numbers and underscores.")
@@ -803,17 +805,17 @@ class WM_OT_ApplyREAssetLibraryUpdate(Operator):
                     print(f"Could not remove update candidate {candidate_directory}: {error}")
 
                 print(f"Applied {game_name} library update. Rollback backup: {backup_directory}")
-                _show_packaging_popup(f"Applied and initialized the {game_name} library update.", "RE Asset Library Update", "INFO")
+                _show_packaging_popup(f"Applied and initialized the {game_name} library update.", "RE Asset Library Update", "INFO", notification_window)
 
             def initialization_failed():
                 try:
                     restore_backup()
                 except OSError as rollback_error:
                     print(f"Library rollback failed: {rollback_error}")
-                    _show_packaging_popup(f"{game_name} initialization and rollback failed. See System console.", "RE Asset Library Update", "ERROR")
+                    _show_packaging_popup(f"{game_name} initialization and rollback failed. See System console.", "RE Asset Library Update", "ERROR", notification_window)
                     return
 
-                _show_packaging_popup(f"{game_name} initialization failed. Previous library restored.", "RE Asset Library Update", "ERROR")
+                _show_packaging_popup(f"{game_name} initialization failed. Previous library restored.", "RE Asset Library Update", "ERROR", notification_window)
 
             _watch_library_initialization(process, log_stream, log_path, initialization_succeeded, initialization_failed)
             self.report({"INFO"}, f"Applying {game_name} update, background initialization started.")
@@ -941,6 +943,7 @@ class WM_OT_PackageREAssetLibrary(Operator):
     def execute(self, context):
         game_name = self.game_name.strip().upper()
         drive_file_id = self.drive_file_id.strip()
+        notification_window = context.window
 
         if not re.fullmatch(r"[A-Z0-9_]+", game_name):
             self.report({"ERROR"}, "Game Name may only contain letters, numbers and underscores.")
@@ -977,7 +980,7 @@ class WM_OT_PackageREAssetLibrary(Operator):
         _active_packaging_processes[game_name] = process
 
         def poll_packaging():
-            return _poll_library_packaging(game_name, process, log_stream, log_path, output_directory)
+            return _poll_library_packaging(game_name, process, log_stream, log_path, output_directory, notification_window)
 
         bpy.app.timers.register(poll_packaging, first_interval=0.5, persistent=True)
 
@@ -1132,6 +1135,7 @@ class WM_OT_ImportREAssetLibrary(Operator, ImportHelper):
 
     def execute(self, context):
         package_path = Path(bpy.path.abspath(self.filepath))
+        notification_window = context.window
 
         if not package_path.is_file():
             self.report({"ERROR"}, f"Package does not exist: {package_path}")
@@ -1178,10 +1182,10 @@ class WM_OT_ImportREAssetLibrary(Operator, ImportHelper):
 
             def initialization_succeeded():
                 print(f"Finished initializing the installed {game_name} Asset Library.")
-                _show_packaging_popup(f"Installed and initialized the {game_name} Asset Library.", "RE Asset Library Installation", "INFO")
+                _show_packaging_popup(f"Installed and initialized the {game_name} Asset Library.", "RE Asset Library Installation", "INFO", notification_window)
 
             def initialization_failed():
-                _show_packaging_popup(f"Failed to initialize {game_name}. See initialization log.", "RE Asset Library Installation", "ERROR")
+                _show_packaging_popup(f"Failed to initialize {game_name}. See initialization log.", "RE Asset Library Installation", "ERROR", notification_window)
 
             _watch_library_initialization(process, log_stream, log_path, initialization_succeeded, initialization_failed)
 

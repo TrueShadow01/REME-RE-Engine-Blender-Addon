@@ -229,12 +229,27 @@ def _start_library_packaging(library_directory, game_name, output_directory, dis
 
     return process, log_stream, log_path
 
-def _show_packaging_popup(message, title, icon):
+def _show_packaging_popup(message, title, icon, target_window=None):
     def draw(menu, context):
         menu.layout.label(text=message)
 
     try:
-        bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
+        window_manager = bpy.context.window_manager
+        windows = list(window_manager.windows)
+        window = target_window
+
+        if window not in windows:
+            window = bpy.context.window
+
+        if window not in windows:
+            window = windows[0] if windows else None
+
+        if window is None:
+            print(f"{title}: {message}")
+            return
+
+        with bpy.context.temp_override(window=window):
+            window_manager.popup_menu(draw, title=title, icon=icon)
     except Exception as error:
         print(f"Could not show packaging popup: {error}")
 

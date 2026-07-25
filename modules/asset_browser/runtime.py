@@ -96,9 +96,6 @@ def asset_browser_import_post(import_context):
             _show_error([f"{asset.name} was not found in the configured chunk paths", f"Add the {game_name} natives folder in REME preferences."])
             return
         
-        if preferences.forceExtract:
-            print("RE Asset Browser - Force Extract is not yet enabled in the integration runtime. Using extracted files.")
-        
         if asset_type == "MESH":
             importREMeshAsset(asset, asset_path, preferences)
         else:

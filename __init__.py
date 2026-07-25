@@ -836,7 +836,6 @@ class REMeshPreferences(AddonPreferences):
         asset_browser_box.operator("re_asset.importlibrary", text="Import Local .reassetlib", icon="FILE_FOLDER")
         asset_browser_box.prop(self, "showMeshImportOptions")
         asset_browser_box.prop(self, "placeAtCursor")
-        asset_browser_box.prop(self, "forceExtract")
 
         maintainer_header = asset_browser_box.row()
         maintainer_icon = (

@@ -475,7 +475,7 @@ class WM_OT_CreateREAssetLibrary(Operator, ImportHelper):
             process, log_stream, log_path = _start_library_initialization(output_blend)
 
             def initialization_succeeded():
-                print(f"Finished initializating the {game_name} Asset Library.")
+                print(f"Finished initializing the {game_name} Asset Library.")
                 _show_packaging_popup(f"Created and initialized the {game_name} Asset Library.", "RE Asset Library Initialization", "INFO")
 
             def initialization_failed():

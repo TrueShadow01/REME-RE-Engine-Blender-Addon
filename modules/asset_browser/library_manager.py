@@ -117,6 +117,8 @@ def _start_library_initialization(output_blend):
     command = [
         bpy.app.binary_path,
         "--background",
+        "--python-exit-code",
+        "1",
         str(output_blend),
         "--python",
         str(initialize_script)

@@ -124,11 +124,20 @@ def _start_library_initialization(output_blend):
         str(initialize_script)
     ]
     process_options = {}
+    log_path = output_blend.with_suffix(".initialization.log")
 
     if hasattr(subprocess, "CREATE_NO_WINDOW"):
         process_options["creationflags"] = subprocess.CREATE_NO_WINDOW
 
-    return subprocess.Popen(command, **process_options)
+    log_stream = log_path.open("wb")
+
+    try:
+        process = subprocess.Popen(command, stdout=log_stream, stderr=subprocess.STDOUT, **process_options)
+    except Exception:
+        log_stream.close()
+        raise
+
+    return process, log_stream, log_path
 
 def _start_library_packaging(library_directory, game_name, output_directory, display_name, release_description, drive_file_id):
     library_directory = Path(library_directory)

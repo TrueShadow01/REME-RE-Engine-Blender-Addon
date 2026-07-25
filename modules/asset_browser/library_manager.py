@@ -139,6 +139,48 @@ def _start_library_initialization(output_blend):
 
     return process, log_stream, log_path
 
+def _poll_library_initialization(process, log_stream, log_path, on_success=None, on_failure=None):
+    return_code = process.poll()
+
+    if return_code is None:
+        return 0.5
+
+    if not log_stream.closed:
+        log_stream.close()
+
+    if return_code == 0:
+        if on_success is not None:
+            try:
+                on_success()
+            except Exception as error:
+                print(f"Library initialization success handling failed: {error}")
+
+        return None
+
+    print(f"Background library initalization failed with exit code {return_code}. Log: {log_path}")
+
+    try:
+        log_output = log_path.read_text(encoding="utf-8", errors="replace").strip()
+
+        if log_output:
+            print(log_output)
+    except Exception as error:
+        print(f"Could not read initialization log: {error}")
+
+    if on_failure is not None:
+        try:
+            on_failure()
+        except Exception as error:
+            print(f"Library initialization failure handling failed: {error}")
+
+    return None
+
+def _watch_library_initialization(process, log_stream, log_path, on_success=None, on_failure=None):
+    def poll_initialization():
+        return _poll_library_initialization(process, log_stream, log_path, on_success, on_failure)
+
+    bpy.app.timers.register(poll_initialization, first_interval=0.5, persistent=True)
+
 def _start_library_packaging(library_directory, game_name, output_directory, display_name, release_description, drive_file_id):
     library_directory = Path(library_directory)
     output_directory = Path(output_directory)

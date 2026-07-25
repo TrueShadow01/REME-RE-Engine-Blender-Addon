@@ -752,6 +752,18 @@ class WM_OT_ApplyREAssetLibraryUpdate(Operator):
         blend_moved = False
         initialization_started = False
 
+        def restore_backup():
+            if blend_moved and backup_blend.is_file():
+                shutil.copy2(backup_blend, active_blend)
+
+            if backup_catalog.is_file():
+                shutil.copy2(backup_catalog, active_catalog)
+
+            if backup_game_info.is_file():
+                shutil.copy2(backup_game_info, active_game_info)
+
+            print("Restored the previous library files.")
+
         try:
             backup_directory.mkdir(parents=True)
 
@@ -782,19 +794,7 @@ class WM_OT_ApplyREAssetLibraryUpdate(Operator):
 
             if not initialization_started:
                 try:
-                    if blend_moved and backup_blend.is_file():
-                        if active_blend.exists():
-                            active_blend.unlink()
-
-                        backup_blend.replace(active_blend)
-
-                    if backup_catalog.is_file():
-                        shutil.copy2(backup_catalog, active_catalog)
-
-                    if backup_game_info.is_file():
-                        shutil.copy2(backup_game_info, active_game_info)
-
-                    print("Restored the previous library files.")
+                    restore_backup()
                 except OSError as rollback_error:
                     print(f"Library rollback failed: {rollback_error}")
             

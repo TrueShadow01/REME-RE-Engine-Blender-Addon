@@ -472,7 +472,16 @@ class WM_OT_CreateREAssetLibrary(Operator, ImportHelper):
                 library.path = str(library_directory)
 
             bpy.ops.wm.save_userpref()
-            _start_library_initialization(output_blend)
+            process, log_stream, log_path = _start_library_initialization(output_blend)
+
+            def initialization_succeeded():
+                print(f"Finished initializating the {game_name} Asset Library.")
+                _show_packaging_popup(f"Created and initialized the {game_name} Asset Library.", "RE Asset Library Initialization", "INFO")
+
+            def initialization_failed():
+                _show_packaging_popup(f"Failed to initialize {game_name}. See initialization log.", "RE Asset Library Initialization", "ERROR")
+
+            _watch_library_initialization(process, log_stream, log_path, initialization_succeeded, initialization_failed)
 
             self.report({"INFO"}, f"Created the {game_name} Asset Library, background initialization started.")
             return {"FINISHED"}

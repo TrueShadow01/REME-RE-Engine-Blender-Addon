@@ -1145,7 +1145,17 @@ class WM_OT_ImportREAssetLibrary(Operator, ImportHelper):
 
             bpy.ops.wm.save_userpref()
 
-            _start_library_initialization(output_blend)
+            process, log_stream, log_path = _start_library_initialization(output_blend)
+
+            def initialization_succeeded():
+                print(f"Finished initializing the installed {game_name} Asset Library.")
+                _show_packaging_popup(f"Installed and initialized the {game_name} Asset Library.", "RE Asset Library Installation", "INFO")
+
+            def initialization_failed():
+                _show_packaging_popup(f"Failed to initialize {game_name}. See initialization log.", "RE Asset Library Installation", "ERROR")
+
+            _watch_library_initialization(process, log_stream, log_path, initialization_succeeded, initialization_failed)
+
             self.report({"INFO"}, f"Started initializing the {game_name} Asset Library in background Blender.")
             return {"FINISHED"}
         except (

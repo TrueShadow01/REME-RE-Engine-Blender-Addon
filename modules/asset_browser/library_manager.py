@@ -778,16 +778,30 @@ class WM_OT_ApplyREAssetLibraryUpdate(Operator):
             shutil.copy2(candidate_game_info, active_game_info)
             shutil.copy2(source_blend, active_blend)
 
-            _start_library_initialization(active_blend)
+            process, log_stream, log_path = _start_library_initialization(active_blend)
             initialization_started = True
 
-            try:
-                shutil.rmtree(candidate_directory)
-            except OSError as error:
-                print(f"Could not remove update candidate {candidate_directory}: {error}")
+            def initialization_succeeded():
+                try:
+                    shutil.rmtree(candidate_directory)
+                except OSError as error:
+                    print(f"Could not remove update candidate {candidate_directory}: {error}")
 
-            print(f"Applied {game_name} library update. Rollback backup: {backup_directory}")
-            self.report({"INFO"}, f"Applied {game_name} update, background initialization started.")
+                print(f"Applied {game_name} library update. Rollback backup: {backup_directory}")
+                _show_packaging_popup(f"Applied and initialized the {game_name} library update.", "RE Asset Library Update", "INFO")
+
+            def initialization_failed():
+                try:
+                    restore_backup()
+                except OSError as rollback_error:
+                    print(f"Library rollback failed: {rollback_error}")
+                    _show_packaging_popup(f"{game_name} initialization and rollback failed. See System console.", "RE Asset Library Update", "ERROR")
+                    return
+
+                _show_packaging_popup(f"{game_name} initialization failed. Previous library restored.", "RE Asset Library Update", "ERROR")
+
+            _watch_library_initialization(process, log_stream, log_path, initialization_succeeded, initialization_failed)
+            self.report({"INFO"}, f"Applying {game_name} update, background initialization started.")
             return {"FINISHED"}
         except Exception as error:
             print(f"Failed to apply the {game_name} Asset Library update: {error}")

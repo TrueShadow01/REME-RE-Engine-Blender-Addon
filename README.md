@@ -62,6 +62,14 @@ REME improves alpha transparency, hair materials, face details and texture handl
 - Presets for multiple RE Engine games
 - Texture and material helper tools
 
+### RE Asset Browser
+
+- Download and register compatible RE Asset Libraries from REME preferences
+- Browse categorized assets with mesh previews in Blender's Asset Browser
+- Drag supported mesh assets into the scene for direct REME import
+- Install local `.reassetlib` packages
+- Create, update, back up and package libraries with optional maintainer tools
+
 ### Street Fighter 6
 
 - Experimental material reconstruction
@@ -75,6 +83,19 @@ REME improves alpha transparency, hair materials, face details and texture handl
 
 - Monster Hunter Wilds mesh import
 - Preliminary mappings for newer RE Engine titles
+
+## RE Asset Browser Setup
+
+1. Extract the required game files before importing assets
+2. Open **Edit → Preferences → Add-ons → RE Mesh Editor**
+3. Set **Asset Library Path** to the folder where downloaded libraries should be stored
+4. In **Chunk Path List**, add the game and its extracted `natives\STM` folder
+   For example: `E:\SF6Extract\natives\stm`
+5. Use **Download RE Asset Library** or **Import Local .reassetlib**
+6. Open Blender's Asset Browser and select `RE Assets - GAME`
+7. Select **All** or a catalog, refresh the library if necessary and drag a mesh into the scene
+
+RE Asset Browser mesh imports use the normal REME import settings and require the matching extracted game files to remain available.
 
 ## Game And Format Support
 
@@ -131,6 +152,7 @@ SF6 Color Index: 1
 - The imported skeleton does not include custom IK or animator-facing controls
 - Blend-shape export is not guaranteed for every supported import path
 - Damage, sweat, animated muscle, cloth-wave and some auxiliary SF6 effects are not reconstructed
+- RE Asset Browser drag import currently supports `MESH` assets only and does not automatically extract files from game PAK archives
 
 ## Roadmap
 

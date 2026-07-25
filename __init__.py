@@ -3,7 +3,7 @@
 bl_info = {
     "name": "RE Mesh Editor (Community Maintained)",
     "author": "NSA Cloud, TrueShadow",
-    "version": (0, 69, 15),
+    "version": (0, 70, 0),
     "blender": (4, 3, 2),
     "location": "File > Import-Export",
     "description": "Import and export RE Engine Mesh files natively into Blender. No Noesis required.",
@@ -29,6 +29,7 @@ from bpy_extras.io_utils import ExportHelper, ImportHelper
 from rna_prop_ui import PropertyPanel
 
 from .modules.blender_utils import operator_exists
+from .modules import asset_browser
 
 # fbxskel
 from .modules.fbxskel.blender_re_fbxskel import exportFBXSkelFile, importFBXSkelFile
@@ -491,6 +492,38 @@ class REMeshPreferences(AddonPreferences):
         description="Show import options when dragging a mesh or mdf file into the 3D View.\nIf this is disabled, the default import options will be used.\nDrag and drop importing is only supported on Blender 4.1 or higher",
         default=False if bpy.app.version < (4, 1, 0) else True,
     )
+
+    assetLibraryPath: StringProperty(
+        name="Asset Library Path",
+        subtype="DIR_PATH",
+        description="Location where downloaded RE Asset Browser libraries are stored",
+        default=os.path.join(bpy.utils.user_resource("DATAFILES"), "REME", "AssetLibraries")
+    )
+
+    showMeshImportOptions: BoolProperty(
+        name="Show Asset Browser Import Options",
+        description="Show REME mesh import options when dragging a mesh from the Asset Browser",
+        default=True
+    )
+
+    placeAtCursor: BoolProperty(
+        name="Place Asset At Cursor",
+        description="Place imported Asset Browser meshes at the drop location instead of the world origin",
+        default=False
+    )
+
+    forceExtract: BoolProperty(
+        name="Force Extract Asset Files",
+        description="Extract files from the game archives even when matching extracted files already exist",
+        default=False
+    )
+
+    showAssetLibraryMaintainerTools: BoolProperty(
+        name="Show Asset Library Maintainer Tools",
+        description="Show tools for creating, updating and packaging RE Asset Libraries",
+        default=False
+    )
+
     showConsole: BoolProperty(
         name="Show Console During Import/Export",
         description="When importing or exporting a file, the console will be opened so that progress can be viewed.\nNote that if the console is already opened before import or export, it will be closed instead.\n This is a limitation of Blender, there's no way to get the active state of the console window.",
@@ -790,6 +823,40 @@ class REMeshPreferences(AddonPreferences):
             column2.prop(self, "default_useBlenderMaterialName")
             column2.prop(self, "default_preserveBoneMatrices")
             column2.prop(self, "default_exportBoundingBoxes")
+
+        asset_browser_box = layout.box()
+        asset_browser_box.label(text="RE Asset Browser", icon="ASSET_MANAGER")
+        asset_browser_box.prop(self, "assetLibraryPath")
+
+        asset_library_row = asset_browser_box.row(align=True)
+        asset_library_row.operator("re_asset.detect_re_asset_library", icon="FILE_REFRESH")
+        asset_library_row.operator("re_asset.open_re_asset_library_folder", icon="FILE_FOLDER")
+
+        asset_browser_box.operator("re_asset.downloadlibrary", icon="IMPORT")
+        asset_browser_box.operator("re_asset.importlibrary", text="Import Local .reassetlib", icon="FILE_FOLDER")
+        asset_browser_box.prop(self, "showMeshImportOptions")
+        asset_browser_box.prop(self, "placeAtCursor")
+
+        maintainer_header = asset_browser_box.row()
+        maintainer_icon = (
+            "DOWNARROW_HLT"
+            if self.showAssetLibraryMaintainerTools
+            else "RIGHTARROW"
+        )
+        maintainer_header.prop(self, "showAssetLibraryMaintainerTools", text="Asset Library Maintainer Tools", icon=maintainer_icon, emboss=False)
+
+        if self.showAssetLibraryMaintainerTools:
+            maintainer_box = asset_browser_box.box()
+            maintainer_box.label(text="These tools are intended for library maintainers.", icon="INFO")
+            maintainer_box.operator("re_asset.create_library_from_list", text="Create Library from RETool List", icon="ADD")
+            maintainer_box.operator("re_asset.prepare_library_update", text="Prepare Library Update", icon="FILE_REFRESH")
+
+            update_row = maintainer_box.row(align=True)
+            update_row.operator("re_asset.apply_library_update", text="Apply Prepared Update", icon="CHECKMARK")
+            update_row.operator("re_asset.discard_library_update", text="Discard Prepared Update", icon="TRASH")
+
+            maintainer_box.separator()
+            maintainer_box.operator("re_asset.package_library", text="Package Library", icon="EXPORT")
 
         layout.label(text="Chunk Path List")
         layout.prop(self, "saveChunkPaths")
@@ -2270,9 +2337,14 @@ def register():
     from . import addon_updater_ops
 
     addon_updater_ops.register(bl_info)
-
+    asset_browser.register()
 
 def unregister():
+    asset_browser.unregister()
+
+    from . import addon_updater_ops
+    addon_updater_ops.unregister()
+
     del bpy.types.WindowManager.enableModFileTracking
     for classEntry in classes:
         bpy.utils.unregister_class(classEntry)

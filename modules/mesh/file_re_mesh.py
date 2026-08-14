@@ -71,6 +71,14 @@ WILDS_PACKED_BLEND_SHAPE_FILE_VERSIONS = frozenset(
     ]
 )
 
+# Pragmata retail mesh extension. Blend deltas are IEEE float16 xyz (8 bytes/vert) in the
+# vertex-buffer tail after the aux table; sunbreakSecondUnknown points at map/delta offsets.
+PRAGMATA_BLEND_SHAPE_FILE_VERSIONS = frozenset(
+    [
+        251121828,
+    ]
+)
+
 # Meshes to test blend shapes with:
 # MHR player face "F:\MHR_EXTRACT\extract\re_chunk_000\natives\STM\player\mod\face\pl_face000.mesh.2109148288"
 # RE4R leon face "I:\RE4_EXTRACT\re_chunk_000\natives\STM\_Chainsaw\Character\ch\cha0\cha000\10\cha000_10.mesh.221108797"
@@ -153,7 +161,7 @@ newVersionToMeshFileVersion = {
     VERSION_ONI2: 240820143,
     VERSION_MHWILDS: 241111606,
     VERSION_MHS3: 250604100,
-    # VERSION_PRAG: 251121828,
+    VERSION_PRAG: 251121828,
     VERSION_RE9: 250925211,
 }
 meshFileVersionToInternalVersionDict = {

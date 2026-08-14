@@ -111,7 +111,7 @@ VERSION_ONI2 = 127  # file:240827123,internal:240827123
 VERSION_MHWILDS = 130  # file:241111606,internal:240704828
 VERSION_PRAG = 135  # file:251121828,internal:250707828
 VERSION_MHS3 = 136  # file:250604100,internal:250203152
-VERSION_RE9 = 140  # file:250925211,internal:250707828#RE9 Placeholder
+VERSION_RE9 = 140  # file:250925211,internal:250904410
 
 SIX_WEIGHT_GAMES = frozenset(
     [
@@ -1427,7 +1427,7 @@ class BlendShapeData:
         # slots group non-morphing submeshes (teeth/eyes/leftover). Read them so export can
         # paste the table instead of reconstructing it from one character's vert counts.
         self.pragmataExtraTargets = []
-        if version == VERSION_PRAGDEMO and self.typing:
+        if version == VERSION_PRAG and self.typing:
             for i in range(0, self.typing):
                 extraTarget = BlendTarget()
                 extraTarget.read(file, version)
@@ -3175,7 +3175,7 @@ def ParsedREMeshToREMesh(parsedMesh, meshVersion):
         # SF6 uses six weights with higher possible bone index values
         isSixWeight = version in SIX_WEIGHT_GAMES
         # Retail Pragmata sets the 2-bit pads in the 6-weight index pack to 0b11.
-        weightIndexPad = 3 if version == VERSION_PRAGDEMO else 0
+        weightIndexPad = 3 if version == VERSION_PRAG else 0
 
         # Main Meshes
         # TODO Move lod parsing into a function and call it for both main and shadow mesh
@@ -3486,7 +3486,7 @@ def ParsedREMeshToREMesh(parsedMesh, meshVersion):
     # Blend shape names are appended after material/bone names; the remap maps each to its
     # rawNameList index (the import reads them back as the trailing name entries).
     # Returns (None, None, None) when there are no shape keys (or EXPORT_WILDS_BLEND_SHAPES is off).
-    if version == VERSION_PRAGDEMO:
+    if version == VERSION_PRAG:
         blendDeltaBytes, blendPerLodList, blendNames = buildPragmataBlendShapeExport(
             parsedMesh, parsedSubMeshToSubMeshDataDict
         )
@@ -3533,7 +3533,7 @@ def ParsedREMeshToREMesh(parsedMesh, meshVersion):
         )
 
     # Retail Pragmata stores a 16-byte normal-recalc stub immediately before the blend header.
-    if version == VERSION_PRAGDEMO and blendPerLodList is not None:
+    if version == VERSION_PRAG and blendPerLodList is not None:
         reMesh.fileHeader.normalRecalcOffset = currentOffset
         reMesh.normalRecalcRegionBytes = struct.pack("<Q", 1) + bytes(8)
         currentOffset = getPaddedPos(currentOffset + 16, 16)
@@ -3541,7 +3541,7 @@ def ParsedREMeshToREMesh(parsedMesh, meshVersion):
     # MH Wilds blend shape struct region (header + per-LOD data), placed before the mesh buffer.
     if blendPerLodList is not None:
         reMesh.fileHeader.blendShapesOffset = currentOffset
-        if version == VERSION_PRAGDEMO:
+        if version == VERSION_PRAG:
             reMesh.blendShapeRegionBytes = serializePragmataBlendShapeRegion(
                 blendPerLodList, currentOffset
             )
@@ -3598,7 +3598,7 @@ def ParsedREMeshToREMesh(parsedMesh, meshVersion):
     # Retail Pragmata extra-weight (type 7) is not Wilds' 7th–12th influences: it is a second
     # index pack the face shader fetches. Blender cannot represent it as vertex groups, so
     # reuse the streams persisted on the .blend (imported as vertex attributes).
-    if version == VERSION_PRAGDEMO:
+    if version == VERSION_PRAG:
         auxInfo = getattr(parsedMesh, "pragmataBlendAux", None) or {}
         nverts = vertexPosBuffer.tell() // 12
         want = nverts * 16
@@ -3608,12 +3608,12 @@ def ParsedREMeshToREMesh(parsedMesh, meshVersion):
             weightBuffer.close()
             weightBuffer = BytesIO(vanWeight)
             weightBuffer.seek(0, 2)
-            print(f"Pragmata: using retail weight stream ({want} bytes)")
+            print(f"Pragmata: using imported type-4 weight stream ({want} bytes); vertex-group edits are not written")
         if vanExtra and len(vanExtra) == want:
             extraWeightBuffer.close()
             extraWeightBuffer = BytesIO(vanExtra)
             extraWeightBuffer.seek(0, 2)
-            print(f"Pragmata: using retail extra-weight stream ({want} bytes)")
+            print(f"Pragmata: using imported type-7 extra-weight stream ({want} bytes); vertex-group edits are not written")
 
     if weightBuffer.tell() != 0:
         vertexElement = VertexElementStruct()
@@ -3648,7 +3648,7 @@ def ParsedREMeshToREMesh(parsedMesh, meshVersion):
     # MeshBufferHeader.sunbreakSecondUnknown holds (mapOffset, deltaOffset) as two u32s.
     # Putting deltas at the geometry end (and leaving those offsets 0) makes the face shader
     # fail to bind — eyes/teeth still draw because they are not morph targets.
-    if version == VERSION_PRAGDEMO and blendDeltaBytes:
+    if version == VERSION_PRAG and blendDeltaBytes:
         nverts = vertexPosBuffer.tell() // 12
         declared = currentBufferOffset
         auxInfo = getattr(parsedMesh, "pragmataBlendAux", None)
@@ -3735,7 +3735,7 @@ def ParsedREMeshToREMesh(parsedMesh, meshVersion):
         unknFlag10 = True
 
     pragmataAux = getattr(parsedMesh, "pragmataBlendAux", None)
-    if version == VERSION_PRAGDEMO and pragmataAux:
+    if version == VERSION_PRAG and pragmataAux:
         if pragmataAux.get("veSize") is not None:
             reMesh.meshBufferHeader.vertexElementSize = int(pragmataAux["veSize"])
         if pragmataAux.get("unkn1") is not None:
@@ -3746,7 +3746,7 @@ def ParsedREMeshToREMesh(parsedMesh, meshVersion):
         + reMesh.meshBufferHeader.faceBufferSize,
         16,
     )
-    if version >= VERSION_DD2 and version != VERSION_PRAGDEMO:
+    if version >= VERSION_DD2 and version not in (VERSION_PRAG, VERSION_RE9):
         if parsedMesh.bufferHasSecondaryWeight:
             reMesh.meshBufferHeader.sunbreakOffset = (
                 reMesh.meshBufferHeader.vertexBufferOffset

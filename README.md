@@ -82,6 +82,7 @@ REME improves alpha transparency, hair materials, face details and texture handl
 ### Experimental Newer-Format Support
 
 - Monster Hunter Wilds mesh import
+- Pragmata `.mesh.251121828` import/export with `typing` 2 blend shapes (see [docs/PRAGMATA.md](docs/PRAGMATA.md))
 - Preliminary mappings for newer RE Engine titles
 
 ## RE Asset Browser Setup
@@ -118,7 +119,7 @@ The following versions are explicitly recognized by the addon. Support can vary 
 | Onimusha 2 | `ONI2` | `240827123` | `46` | `240701001` | Limited validation |
 | Monster Hunter Wilds | `MHWILDS` | `241111606` | `45` | `241106027` | Experimental |
 | Monster Hunter Stories 3 | `MHS3` | `250604100` | `49` | `251111100` | Preliminary |
-| Pragmata | `PRAG` | `251121828` | `51` | `251111100` | Supported |
+| Pragmata | `PRAG` | `251121828` | `51` | `251111100` | Supported (mesh round-trip; see [docs/PRAGMATA.md](docs/PRAGMATA.md)) |
 | Resident Evil 9 / Requiem | `RE9` | `250925211` | `51` | `250813143` | Experimental |
 
 “Supported” means the corresponding format versions have importer mappings. It does not guarantee perfect reconstruction of every material, effect, animation or blend shape.
@@ -141,11 +142,21 @@ SF6 Costume Index: 2
 SF6 Color Index: 1
 ```
 
+## Pragmata
+
+Retail Pragmata character meshes use **`typing` 2** blend shapes (IEEE float16 xyz in the vertex-buffer tail), not MH Wilds packed 11/10/11 deltas. Extra-weight (vertex element type 7) is a second bone-index pack, not a 7th–12th influence.
+
+Same-topology round-trip (sculpt in place, reorder verts, keep vertex count) is supported because retail weight / extra-weight / morph-aux streams are stored on the `.blend` at import and pasted back on export. Vertex-group weight-paint edits are not written. A remesh cannot invent those tables.
+
+Details, buffer layout, and approaches that fail: **[docs/PRAGMATA.md](docs/PRAGMATA.md)**.
+
 ## Known Limitations
 - Blender 5.1 is not currently supported
 - Monster Hunter Wilds support remains experimental
 - Static Pragmata MPLY environment geometry is supported but skinned MPLY clusters do not reconstruct joint weights yet
 - Pragmata hair uses its NROC maps and a primary anisotropic highlight approximation, parallax-coupled unique albedo and secondary hair lobes are not reconstructed
+- Pragmata face remesh (changed vertex count) cannot round-trip extra-weight or morph aux
+- Pragmata export pastes imported type-4/type-7 streams; vertex-group weight paint is not written
 - Blend-shape support varies by game and mesh format
 - SF6 blend shapes are kept at zero by default
 - Automatic SF6 JCNS pose-corrective drivers are disabled while their vertex mapping remains experimental

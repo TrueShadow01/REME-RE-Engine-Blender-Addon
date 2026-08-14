@@ -263,6 +263,15 @@ def ReadBlendShapeShortBuffer(blendShapeBuffer, tags):
 	return blendShapeArray
 
 
+def ReadBlendShapeFloat16Buffer(blendShapeBuffer, tags):
+	recordSize = 8
+	usableSize = len(blendShapeBuffer) - (len(blendShapeBuffer) % recordSize)
+	if usableSize != len(blendShapeBuffer):
+		print(f"Blend shape f16 contains {len(blendShapeBuffer) - usableSize} trailing padding bytes.")
+	arr = np.frombuffer(memoryview(blendShapeBuffer)[:usableSize], dtype="<f2").reshape(-1, 4)
+	return arr[:, :3].astype(np.float32)
+
+
 def remapBlendShapeDeltas(blendShapeDeltas,aabb,zeroIsSentinel=False):
 	# SF6 uses an all 0 encoded record to mean no vertex delta.
 	# Preserve that mask before applying the target AABB remapping
@@ -754,20 +763,24 @@ def parseLODStructure(
 			# print(f"LOD Index {str(lodIndex)}")
 			# Guard against an out-of-range typing (e.g. Wilds typing=7); Wilds is handled by the
 			# packed decode path above, so this legacy path only runs for SF6 and earlier.
-			if blendShapeLODData.typing < len(blendShapeNameMapping):
-				bufferType = blendShapeNameMapping[blendShapeLODData.typing]
-			else:
-				bufferType = "BlendShapeShort"
-			bufferStride = blendShapeStrideDict[bufferType]
-
-			# endOffset = currentBlendShapeOffset + (blendShapeLODData.vertCount*bufferStride)
-
-			# blendShapeDeltas = BlendShapeBufferReadDict[bufferType](blendShapeBuffer[currentBlendShapeOffset:endOffset],tags = blendShapeTags)
-
-			# TODO Get slice containing only current LOD, currently parses whole buffer for each LOD
-			blendShapeDeltas = BlendShapeBufferReadDict[bufferType](
-				blendShapeBuffer, tags=blendShapeTags
+			# Pragmata typing 2 is IEEE float16 xyz (not AABB-unorm shorts). Other games that
+			# happen to use typing 2 still go through BlendShapeShort.
+			pragmataF16 = (
+				blendShapeLODData.typing == 2
+				and reMesh.meshVersion in PRAGMATA_BLEND_SHAPE_FILE_VERSIONS
 			)
+			if pragmataF16:
+				blendShapeDeltas = ReadBlendShapeFloat16Buffer(
+					blendShapeBuffer, tags=blendShapeTags
+				)
+			else:
+				if blendShapeLODData.typing < len(blendShapeNameMapping):
+					bufferType = blendShapeNameMapping[blendShapeLODData.typing]
+				else:
+					bufferType = "BlendShapeShort"
+				blendShapeDeltas = BlendShapeBufferReadDict[bufferType](
+					blendShapeBuffer, tags=blendShapeTags
+				)
 
 			# print(f"Delta Vert Count {str(len(blendShapeDeltas))}")
 			# (f"Delta Length {str(endOffset-currentBlendShapeOffset)}")
@@ -817,7 +830,11 @@ def parseLODStructure(
 						for subMeshEntry in blendTarget.subMeshEntryList:
 							blendShapeEntry = BlendShape()
 							blendShapeEntry.blendShapeName = blendShapeName
-							blendShapeEntry.deltas = remapBlendShapeDeltas(blendShapeDeltas[currentBlendDeltaOffset:currentBlendDeltaOffset+subMeshEntry.vertCount],blendShapeLODData.aabbList[blendTargetIndex],zeroIsSentinel=reMesh.meshVersion == VERSION_SF6)
+							seg = blendShapeDeltas[currentBlendDeltaOffset:currentBlendDeltaOffset+subMeshEntry.vertCount]
+							if pragmataF16:
+								blendShapeEntry.deltas = np.asarray(seg, dtype=np.float32)
+							else:
+								blendShapeEntry.deltas = remapBlendShapeDeltas(seg,blendShapeLODData.aabbList[blendTargetIndex],zeroIsSentinel=reMesh.meshVersion == VERSION_SF6)
 
 							# blendShapeEntry.deltas[:,0] -= blendShapeLODData.aabbList[blendTargetIndex].max.x
 							# blendShapeEntry.deltas[:,1] -= blendShapeLODData.aabbList[blendTargetIndex].max.y
@@ -838,7 +855,11 @@ def parseLODStructure(
 					else:
 						blendShapeEntry = BlendShape()
 						blendShapeEntry.blendShapeName = blendShapeName
-						blendShapeEntry.deltas = remapBlendShapeDeltas(blendShapeDeltas[currentBlendDeltaOffset:currentBlendDeltaOffset+blendTarget.vertCount],blendShapeLODData.aabbList[blendTargetIndex],zeroIsSentinel=reMesh.meshVersion == VERSION_SF6)
+						seg = blendShapeDeltas[currentBlendDeltaOffset:currentBlendDeltaOffset+blendTarget.vertCount]
+						if pragmataF16:
+							blendShapeEntry.deltas = np.asarray(seg, dtype=np.float32)
+						else:
+							blendShapeEntry.deltas = remapBlendShapeDeltas(seg,blendShapeLODData.aabbList[blendTargetIndex],zeroIsSentinel=reMesh.meshVersion == VERSION_SF6)
 
 						currentBlendDeltaOffset += blendTarget.vertCount
 						if blendTarget.subMeshVertexStartIndex in blendShapeDict:
@@ -1120,6 +1141,7 @@ class ParsedREMesh:
 		self.bufferHasIntFaces = False
 		self.bufferHasExtraWeight = False  # Doubled weight buffer, used in MH Wilds
 		self.bufferHasSecondaryWeight = False  # DD2 shapekeys
+		self.pragmataBlendAux = None
 
 	def ParseREMesh(
 		self,
@@ -1265,6 +1287,25 @@ class ParsedREMesh:
 				lastElement.posStartOffset + vertexCount * lastElement.stride
 			)
 			blendShapeBuffer = reMesh.meshBufferHeader.vertexBuffer[blendShapeStartPos:]
+			bsh = reMesh.blendShapeHeader
+			if (
+				bsh is not None
+				and bsh.blendShapeList
+				and bsh.blendShapeList[0].typing == 2
+			):
+				sun2 = getattr(reMesh.meshBufferHeader, "sunbreakSecondUnknown", 0) or 0
+				deltaOff = sun2 >> 32
+				if deltaOff > blendShapeStartPos:
+					self.pragmataBlendAux = {
+						"aux": bytes(
+							reMesh.meshBufferHeader.vertexBuffer[
+								blendShapeStartPos:deltaOff
+							]
+						),
+						"veSize": reMesh.meshBufferHeader.vertexElementSize,
+						"unkn1": reMesh.meshBufferHeader.unkn1,
+					}
+					blendShapeBuffer = reMesh.meshBufferHeader.vertexBuffer[deltaOff:]
 
 		# Decode modern blend shape formats before the legacy path
 		wildsBlendShapeDict = None

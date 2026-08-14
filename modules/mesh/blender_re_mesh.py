@@ -776,23 +776,28 @@ def importMesh(
 
         # Deltas are decoded in game space; rotate them to match the mesh's rotated basis.
         rot3 = rotate90Matrix.to_3x3() if rotate90 else None
+        nverts = len(meshObj.data.vertices)
+        basis = np.empty(nverts * 3, dtype=np.float32)
+        meshObj.data.vertices.foreach_get("co", basis)
+        basis = basis.reshape(-1, 3)
+        rotN = np.array(rot3, dtype=np.float32) if rot3 is not None else None
         for blendShapeEntry in blendShapeList:
             rawName = blendShapeEntry.blendShapeName
             name = rawName if preserveRawBlendShapeNames else cleanShapeKeyName(rawName)
-            if rot3 is not None:
-                deltas = [rot3 @ Vector(val) for val in blendShapeEntry.deltas]
+            dsrc = np.asarray(blendShapeEntry.deltas, dtype=np.float32).reshape(-1, 3)
+            n = min(len(dsrc), nverts)
+            darr = np.zeros((nverts, 3), dtype=np.float32)
+            if rotN is not None:
+                darr[:n] = dsrc[:n] @ rotN.T
             else:
-                deltas = [Vector(val) for val in blendShapeEntry.deltas]
-            # print(deltas)
+                darr[:n] = dsrc[:n]
             sk = meshObj.shape_key_add(name=name)
             sk.interpolation = "KEY_LINEAR"
             sk.value = 0.0  # Default to the rest basis so the mesh isn't shown as a morph mix
             # Wilds blend regions are partial: a shape's deltas cover only the morphable vertex span
             # (submesh-relative, starting at vertex 0), not the whole submesh. Apply what we have and
             # leave the rest at the basis, rather than discarding everything on a length mismatch.
-            n = min(len(deltas), len(meshObj.data.vertices))
-            for i in range(n):
-                sk.data[i].co = meshObj.data.vertices[i].co + deltas[i]
+            sk.data.foreach_set("co", (basis + darr).reshape(-1))
 
     return meshObj
 

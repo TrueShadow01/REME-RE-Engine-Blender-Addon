@@ -21,9 +21,12 @@ from .file_re_jcns import JCNSParseError, findJCNSPath, readJCNS
 from .file_re_mesh import (
     AABB,
     EXPORT_WILDS_BLEND_SHAPES,
+    PRAGMATA_BLEND_SHAPE_FILE_VERSIONS,
     Matrix4x4,
     ParsedREMeshToREMesh,
     Sphere,
+    extractPragmataBlendAux,
+    findExtractedVanillaMesh,
     meshFileVersionToGameNameDict,
     readREMesh,
     writeREMesh,
@@ -1786,7 +1789,8 @@ def exportREMeshFile(filePath, options):
                         boneBBox
                     )
             elif objType == "RE_MESH_BOUNDING_BOX":
-                importedMeshBoundingBox = AABB()
+                if parsedMesh.boundingBox is None:
+                    parsedMesh.boundingBox = AABB()
                 if (
                     obj.data.vertices[0].co[0] < obj.data.vertices[1].co[0]
                     or obj.data.vertices[0].co[1] < obj.data.vertices[1].co[1]
@@ -1804,6 +1808,8 @@ def exportREMeshFile(filePath, options):
                 parsedMesh.boundingBox.max.y = maxVert.co[1]
                 parsedMesh.boundingBox.max.z = maxVert.co[2]
             elif objType == "RE_MESH_BOUNDING_SPHERE":
+                if parsedMesh.boundingSphere is None:
+                    parsedMesh.boundingSphere = Sphere()
                 importedMeshBoundingSphere = Sphere()
 
                 parsedMesh.boundingSphere.x = obj.location[0]
@@ -2402,7 +2408,10 @@ def exportREMeshFile(filePath, options):
                     and len(rawsubmesh.data.shape_keys.key_blocks) > 1
                     and not (
                         EXPORT_WILDS_BLEND_SHAPES
-                        and meshVersion in PACKED_BLEND_SHAPE_MESH_VERSIONS
+                        and (
+                            meshVersion in PACKED_BLEND_SHAPE_MESH_VERSIONS
+                            or meshVersion in PRAGMATA_BLEND_SHAPE_FILE_VERSIONS
+                        )
                     )
                 ):
                     print(
@@ -2412,7 +2421,10 @@ def exportREMeshFile(filePath, options):
                     )
                 if (
                     EXPORT_WILDS_BLEND_SHAPES
-                    and meshVersion in PACKED_BLEND_SHAPE_MESH_VERSIONS
+                    and (
+                        meshVersion in PACKED_BLEND_SHAPE_MESH_VERSIONS
+                        or meshVersion in PRAGMATA_BLEND_SHAPE_FILE_VERSIONS
+                    )
                     and rawsubmesh.data.shape_keys is not None
                     and len(rawsubmesh.data.shape_keys.key_blocks) > 1
                 ):
@@ -2655,6 +2667,12 @@ def exportREMeshFile(filePath, options):
                 parsedMesh.skeleton.weightedBones[index] = hashedBoneNameDict[boneName]
 
     meshWriteStartTime = time.time()
+    if meshVersion in PRAGMATA_BLEND_SHAPE_FILE_VERSIONS:
+        vanillaPath = findExtractedVanillaMesh(filePath)
+        if vanillaPath:
+            auxInfo = extractPragmataBlendAux(vanillaPath)
+            if auxInfo:
+                parsedMesh.pragmataBlendAux = auxInfo
     reMesh = ParsedREMeshToREMesh(parsedMesh, meshVersion)
     if targetCollection is not None:
         reMesh.fileHeader.lodGroupNameHash = int(

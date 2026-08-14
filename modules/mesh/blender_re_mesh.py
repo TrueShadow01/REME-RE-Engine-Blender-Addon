@@ -1,5 +1,7 @@
 # Author: NSA Cloud
 
+import base64
+import json
 import os
 import time
 from itertools import chain, islice, repeat
@@ -11,7 +13,7 @@ import numpy as np
 from mathutils import Matrix, Vector
 
 from ..blender_utils import showErrorMessageBox, showMessageBox
-from ..gen_functions import raiseWarning, splitNativesPath
+from ..gen_functions import raiseError, raiseWarning, splitNativesPath
 from ..hashing.mmh3.pymmh3 import hashUTF8
 from ..mdf.blender_re_mdf import importMDFFile
 from ..mdf.blender_re_mesh_mdf import findMDFPathFromMeshPath, importMDF
@@ -25,8 +27,6 @@ from .file_re_mesh import (
     Matrix4x4,
     ParsedREMeshToREMesh,
     Sphere,
-    extractPragmataBlendAux,
-    findExtractedVanillaMesh,
     meshFileVersionToGameNameDict,
     readREMesh,
     writeREMesh,
@@ -59,6 +59,246 @@ from .re_mesh_parse import (
 timeFormat = "%d"
 rotateNeg90Matrix = Matrix.Rotation(radians(-90.0), 4, "X")
 rotate90Matrix = Matrix.Rotation(radians(90.0), 4, "X")
+
+# Pragmata retail streams that Blender cannot represent as vertex groups / shape keys.
+# Stored on the .blend so export does not need the unpacked game dump. See docs/PRAGMATA.md.
+# Per-vert INT attrs: src_index, wt_0..3 (type 4), ew_0..3 (type 7), ax_0..3 (aux), map.
+# Collection: pragmata_aux_extra (b64), pragmata_veSize, pragmata_unkn1, pragmata_nverts,
+# pragmata_blend_header (JSON snapshot of typing-2 BlendTarget grouping).
+PRAG_ATTR_SRC = "pragmata_src_index"
+PRAG_ATTR_MAP = "pragmata_map"
+PRAG_COL_EXTRA = "pragmata_aux_extra"
+PRAG_COL_VESIZE = "pragmata_veSize"
+PRAG_COL_UNKN1 = "pragmata_unkn1"
+PRAG_COL_NVERTS = "pragmata_nverts"
+PRAG_COL_BLEND_HDR = "pragmata_blend_header"
+
+
+def _prag_set_int_attr(mesh, name, values):
+    attr = mesh.attributes.get(name)
+    if attr is None:
+        attr = mesh.attributes.new(name, "INT", "POINT")
+    attr.data.foreach_set("value", np.ascontiguousarray(values, dtype=np.int32))
+
+
+def _prag_get_int_attr(mesh, name, nverts):
+    attr = mesh.attributes.get(name)
+    if attr is None or len(mesh.vertices) != nverts:
+        return None
+    buf = np.empty(nverts, dtype=np.int32)
+    attr.data.foreach_get("value", buf)
+    return buf
+
+
+def _prag_set_i4_record(mesh, prefix, raw16, nverts):
+    if raw16 is None or len(raw16) != nverts * 16:
+        return
+    arr = np.frombuffer(raw16, dtype="<i4").reshape(nverts, 4)
+    for c in range(4):
+        _prag_set_int_attr(mesh, f"{prefix}{c}", arr[:, c])
+
+
+def _prag_get_i4_record(mesh, prefix, nverts):
+    cols = []
+    for c in range(4):
+        col = _prag_get_int_attr(mesh, f"{prefix}{c}", nverts)
+        if col is None:
+            return None
+        cols.append(col)
+    return np.stack(cols, axis=1).astype("<i4").tobytes()
+
+
+def writePragmataVertAttrs(meshObj, parsedMesh, srcStart, nverts):
+    """Copy parsed pragmataBlendAux slices onto a newly imported submesh."""
+    info = getattr(parsedMesh, "pragmataBlendAux", None)
+    if not info or nverts <= 0:
+        return
+    mesh = meshObj.data
+    src = np.arange(srcStart, srcStart + nverts, dtype=np.int32)
+    _prag_set_int_attr(mesh, PRAG_ATTR_SRC, src)
+    sl = slice(srcStart, srcStart + nverts)
+    wt = info.get("weight")
+    ew = info.get("extraW")
+    ax = info.get("aux")
+    mp = info.get("map")
+    if wt and len(wt) >= sl.stop * 16:
+        _prag_set_i4_record(mesh, "pragmata_wt_", wt[sl.start * 16 : sl.stop * 16], nverts)
+    if ew and len(ew) >= sl.stop * 16:
+        _prag_set_i4_record(mesh, "pragmata_ew_", ew[sl.start * 16 : sl.stop * 16], nverts)
+    if ax and len(ax) >= sl.stop * 16:
+        _prag_set_i4_record(mesh, "pragmata_ax_", ax[sl.start * 16 : sl.stop * 16], nverts)
+    if mp and len(mp) >= sl.stop * 4:
+        _prag_set_int_attr(
+            mesh,
+            PRAG_ATTR_MAP,
+            np.frombuffer(mp[sl.start * 4 : sl.stop * 4], dtype="<i4"),
+        )
+
+
+def writePragmataCollectionProps(collection, parsedMesh):
+    info = getattr(parsedMesh, "pragmataBlendAux", None)
+    if not info or collection is None:
+        return
+    extra = info.get("auxExtra")
+    if extra:
+        collection[PRAG_COL_EXTRA] = base64.b64encode(extra).decode("ascii")
+    if info.get("veSize") is not None:
+        collection[PRAG_COL_VESIZE] = int(info["veSize"])
+    if info.get("unkn1") is not None:
+        collection[PRAG_COL_UNKN1] = int(info["unkn1"])
+    if info.get("nverts") is not None:
+        collection[PRAG_COL_NVERTS] = int(info["nverts"])
+    hdr = info.get("blendHeader")
+    if hdr:
+        collection[PRAG_COL_BLEND_HDR] = json.dumps(hdr, separators=(",", ":"))
+
+
+def _find_pragmata_collection(col):
+    if col is None:
+        return None
+    if PRAG_COL_NVERTS in col or PRAG_COL_EXTRA in col or PRAG_COL_BLEND_HDR in col:
+        return col
+    for child in getattr(col, "children", []):
+        found = _find_pragmata_collection(child)
+        if found is not None:
+            return found
+    return None
+
+
+def _permute_parsed_submesh(parsedSubMesh, perm):
+    n = len(perm)
+
+    def take(arr):
+        if arr is None:
+            return arr
+        a = np.asarray(arr)
+        if a.size == 0 or a.shape[0] != n:
+            return arr
+        return a[perm]
+
+    parsedSubMesh.vertexPosList = take(parsedSubMesh.vertexPosList)
+    parsedSubMesh.normalList = take(parsedSubMesh.normalList)
+    parsedSubMesh.tangentList = take(parsedSubMesh.tangentList)
+    parsedSubMesh.uvList = take(parsedSubMesh.uvList)
+    parsedSubMesh.uv2List = take(parsedSubMesh.uv2List)
+    parsedSubMesh.colorList = take(parsedSubMesh.colorList)
+    parsedSubMesh.weightList = take(parsedSubMesh.weightList)
+    parsedSubMesh.weightIndicesList = take(parsedSubMesh.weightIndicesList)
+    parsedSubMesh.extraWeightList = take(parsedSubMesh.extraWeightList)
+    parsedSubMesh.extraWeightIndicesList = take(parsedSubMesh.extraWeightIndicesList)
+    parsedSubMesh.secondaryWeightList = take(parsedSubMesh.secondaryWeightList)
+    parsedSubMesh.secondaryWeightIndicesList = take(
+        parsedSubMesh.secondaryWeightIndicesList
+    )
+    rank = np.empty(n, dtype=np.int32)
+    rank[perm] = np.arange(n, dtype=np.int32)
+    parsedSubMesh.faceList = [
+        tuple(int(rank[v]) for v in face) for face in parsedSubMesh.faceList
+    ]
+    for bs in parsedSubMesh.blendShapeList:
+        d = np.asarray(bs.deltas)
+        if d.shape[0] == n:
+            bs.deltas = d[perm]
+
+
+def applyPragmataExportOrderAndStreams(rawsubmesh, parsedSubMesh, nverts):
+    """Restore retail vertex order from pragmata_src_index and collect raw streams.
+
+    Returns (weight16, extra16, aux16, map4) in the *exported* vertex order, or Nones.
+    """
+    mesh = rawsubmesh.data
+    if len(mesh.vertices) != nverts:
+        return None, None, None, None
+    src = _prag_get_int_attr(mesh, PRAG_ATTR_SRC, nverts)
+    perm = None
+    if src is not None:
+        parsedSubMesh.pragmataSrcStart = int(src.min())
+        mn = int(src.min())
+        expected = np.arange(mn, mn + nverts, dtype=np.int32)
+        if np.array_equal(np.sort(src), expected):
+            perm = np.argsort(src, kind="stable")
+            _permute_parsed_submesh(parsedSubMesh, perm)
+        else:
+            print(
+                f"Pragmata: src_index on {rawsubmesh.name} is not a complete "
+                f"{nverts}-vert range; keeping Blender vertex order"
+            )
+    order = perm if perm is not None else np.arange(nverts)
+    wt = _prag_get_i4_record(mesh, "pragmata_wt_", nverts)
+    ew = _prag_get_i4_record(mesh, "pragmata_ew_", nverts)
+    ax = _prag_get_i4_record(mesh, "pragmata_ax_", nverts)
+    mp = _prag_get_int_attr(mesh, PRAG_ATTR_MAP, nverts)
+    if wt:
+        warr = np.frombuffer(wt, dtype=np.uint8).reshape(nverts, 16)
+        wt = bytes(warr[order].reshape(-1))
+    if ew:
+        earr = np.frombuffer(ew, dtype=np.uint8).reshape(nverts, 16)
+        ew = bytes(earr[order].reshape(-1))
+    if ax:
+        aarr = np.frombuffer(ax, dtype=np.uint8).reshape(nverts, 16)
+        ax = bytes(aarr[order].reshape(-1))
+    if mp is not None:
+        mp = np.ascontiguousarray(mp[order], dtype="<i4").tobytes()
+    return wt, ew, ax, mp
+
+
+def assemblePragmataBlendAux(targetCollection, parsedMesh, streamChunks):
+    """Build pragmataBlendAux from .blend attributes. No unpacked-game fallback."""
+    if not streamChunks:
+        return None
+    col = _find_pragmata_collection(targetCollection)
+    weights, extras, auxes, maps = zip(*streamChunks)
+    if not any(weights) and not any(extras) and not any(auxes):
+        return None
+    if not all(weights) or not all(extras):
+        print(
+            "Pragmata: missing weight/extra-weight attributes on some submeshes; "
+            "export will not write retail skinning streams"
+        )
+        return None
+    info = {
+        "weight": b"".join(weights),
+        "extraW": b"".join(extras),
+        "nverts": sum(len(w) // 16 for w in weights),
+    }
+    if all(auxes) and all(m is not None for m in maps):
+        extra = b""
+        if col is not None and PRAG_COL_EXTRA in col:
+            try:
+                extra = base64.b64decode(col[PRAG_COL_EXTRA], validate=True)
+            except Exception as err:
+                raiseError(
+                    f"Pragmata collection property {PRAG_COL_EXTRA} is not valid base64 ({err}). "
+                    "Re-import the mesh; refusing to invent a morph tail."
+                )
+        if extra:
+            info["aux"] = b"".join(auxes) + extra + b"".join(maps)
+            info["auxExtra"] = extra
+            info["map"] = b"".join(maps)
+        else:
+            print(
+                "Pragmata: missing aux extra blob on the mesh collection; "
+                "morph tail will not be written"
+            )
+    if col is not None:
+        if PRAG_COL_VESIZE in col:
+            info["veSize"] = int(col[PRAG_COL_VESIZE])
+        if PRAG_COL_UNKN1 in col:
+            info["unkn1"] = int(col[PRAG_COL_UNKN1])
+        if PRAG_COL_BLEND_HDR in col:
+            try:
+                info["blendHeader"] = json.loads(col[PRAG_COL_BLEND_HDR])
+            except Exception as err:
+                raiseWarning(
+                    f"Pragmata collection property {PRAG_COL_BLEND_HDR} is not valid JSON ({err})"
+                )
+    parsedMesh.pragmataBlendAux = info
+    print(
+        f"Pragmata streams from Blender: weight={len(info['weight'])} "
+        f"extraW={len(info['extraW'])} aux={len(info.get('aux') or b'')} "
+        f"nverts={info['nverts']}"
+    )
+    return info
 
 # create compact numeric literals for blender driver expression
 def _formatSF6DriverValue(value):
@@ -911,6 +1151,12 @@ def importLODGroup(
                         blendMeta=subMesh.wildsBlendMeta,
                         preserveRawBlendShapeNames=preserveRawBlendShapeNames,
                     )
+                    writePragmataVertAttrs(
+                        meshObj,
+                        parsedMesh,
+                        subMesh.meshVertexOffset,
+                        len(subMesh.vertexPosList),
+                    )
                     if parsedMesh.isMPLY:
                         meshObj.parent = MPLYRoot
 
@@ -1222,6 +1468,7 @@ def importREMeshFile(filePath, options):
             options["importBoundingBoxes"],
             preserveRawBlendShapeNames=sf6JCNSData is not None,
         )
+        writePragmataCollectionProps(meshCollection, parsedMesh)
         # collect only meshes created by this import.
         importedMeshObjectList = {
             obj
@@ -1850,6 +2097,7 @@ def exportREMeshFile(filePath, options):
                             ):
                                 weightedBonesSet.add(vgName)
 
+    pragmataChunks = []
     for lodIndex, lod in enumerate(meshLODCollectionList):
         print(f"LOD {lodIndex} collection:{lod.name}")
         parsedLODLevel = LODLevel()
@@ -2463,6 +2711,15 @@ def exportREMeshFile(filePath, options):
                             f"vertex-count-changing modifiers before export."
                         )
 
+                if meshVersion in PRAGMATA_BLEND_SHAPE_FILE_VERSIONS:
+                    pragmataChunks.append(
+                        applyPragmataExportOrderAndStreams(
+                            rawsubmesh,
+                            parsedSubMesh,
+                            len(evaluatedSubMeshData.vertices),
+                        )
+                    )
+
                 visconGroup.subMeshList.append(parsedSubMesh)
                 if any(
                     [
@@ -2668,11 +2925,23 @@ def exportREMeshFile(filePath, options):
 
     meshWriteStartTime = time.time()
     if meshVersion in PRAGMATA_BLEND_SHAPE_FILE_VERSIONS:
-        vanillaPath = findExtractedVanillaMesh(filePath)
-        if vanillaPath:
-            auxInfo = extractPragmataBlendAux(vanillaPath)
-            if auxInfo:
-                parsedMesh.pragmataBlendAux = auxInfo
+        assemblePragmataBlendAux(targetCollection, parsedMesh, pragmataChunks)
+        hasShapes = any(
+            getattr(sm, "blendShapeList", None)
+            for lod in parsedMesh.mainMeshLODList
+            for viscon in lod.visconGroupList
+            for sm in viscon.subMeshList
+        )
+        auxInfo = getattr(parsedMesh, "pragmataBlendAux", None) or {}
+        if hasShapes and not (auxInfo.get("aux") and auxInfo.get("auxExtra")):
+            msg = (
+                "Pragmata face export needs imported morph aux/map streams on the .blend "
+                "(same vertex count as import). Re-import the mesh; remesh is not supported. "
+                "Refusing to write a zeroed morph tail, which crashes the GPU."
+            )
+            print(msg)
+            showErrorMessageBox(msg)
+            return False
     reMesh = ParsedREMeshToREMesh(parsedMesh, meshVersion)
     if targetCollection is not None:
         reMesh.fileHeader.lodGroupNameHash = int(

@@ -7,7 +7,9 @@ from .file_re_mesh import (
 	CompressedBlendShapeVertexInt,
 	CompressedSixWeightIndices,
 	Matrix4x4,
+	PRAGMATA_BLEND_SHAPE_FILE_VERSIONS,
 	Sphere,
+	capturePragmataBlendHeader,
 )
 
 # MESH VERSIONS
@@ -1141,6 +1143,8 @@ class ParsedREMesh:
 		self.bufferHasIntFaces = False
 		self.bufferHasExtraWeight = False  # Doubled weight buffer, used in MH Wilds
 		self.bufferHasSecondaryWeight = False  # DD2 shapekeys
+		# Filled for Pragmata typing-2 meshes: raw type-4/7 streams, split aux/map, veSize/unkn1.
+		# Consumed on Blender import as vertex attributes; see docs/PRAGMATA.md.
 		self.pragmataBlendAux = None
 
 	def ParseREMesh(
@@ -1287,25 +1291,51 @@ class ParsedREMesh:
 				lastElement.posStartOffset + vertexCount * lastElement.stride
 			)
 			blendShapeBuffer = reMesh.meshBufferHeader.vertexBuffer[blendShapeStartPos:]
-			bsh = reMesh.blendShapeHeader
-			if (
-				bsh is not None
-				and bsh.blendShapeList
-				and bsh.blendShapeList[0].typing == 2
-			):
+			# Typing-2 aux/map split and raw skinning streams are Pragmata-only.
+			# Do not stamp pragmata_* attributes onto other games' skinned meshes.
+			if reMesh.meshVersion in PRAGMATA_BLEND_SHAPE_FILE_VERSIONS:
+				vtx = reMesh.meshBufferHeader.vertexBuffer
+				streams = {}
+				for el in reMesh.meshBufferHeader.vertexElementList:
+					if el.typing == 4 and el.stride == 16:
+						streams["weight"] = bytes(
+							vtx[el.posStartOffset : el.posStartOffset + vertexCount * 16]
+						)
+					elif el.typing == 7 and el.stride == 16:
+						streams["extraW"] = bytes(
+							vtx[el.posStartOffset : el.posStartOffset + vertexCount * 16]
+						)
 				sun2 = getattr(reMesh.meshBufferHeader, "sunbreakSecondUnknown", 0) or 0
 				deltaOff = sun2 >> 32
+				aux = extra = vmap = None
 				if deltaOff > blendShapeStartPos:
-					self.pragmataBlendAux = {
-						"aux": bytes(
-							reMesh.meshBufferHeader.vertexBuffer[
-								blendShapeStartPos:deltaOff
-							]
-						),
-						"veSize": reMesh.meshBufferHeader.vertexElementSize,
-						"unkn1": reMesh.meshBufferHeader.unkn1,
-					}
-					blendShapeBuffer = reMesh.meshBufferHeader.vertexBuffer[deltaOff:]
+					auxBlob = bytes(vtx[blendShapeStartPos:deltaOff])
+					# Retail typing-2 tail: 16 bytes/vert + 896-byte extra + u32 vert map.
+					# Deltas start at sun2.hi — do not treat aux as shape-key data. docs/PRAGMATA.md.
+					if len(auxBlob) == vertexCount * 20 + 896:
+						extra = auxBlob[vertexCount * 16 : vertexCount * 16 + 896]
+						vmap = auxBlob[vertexCount * 16 + 896 :]
+						aux = auxBlob[: vertexCount * 16]
+					else:
+						aux = auxBlob
+					blendShapeBuffer = vtx[deltaOff:]
+				self.pragmataBlendAux = {
+					"aux": aux,
+					"auxExtra": extra,
+					"map": vmap,
+					"veSize": reMesh.meshBufferHeader.vertexElementSize,
+					"unkn1": reMesh.meshBufferHeader.unkn1,
+					"nverts": vertexCount,
+					"weight": streams.get("weight"),
+					"extraW": streams.get("extraW"),
+				}
+				if (
+					reMesh.blendShapeHeader is not None
+					and reMesh.blendShapeHeader.blendShapeList
+				):
+					self.pragmataBlendAux["blendHeader"] = capturePragmataBlendHeader(
+						reMesh.blendShapeHeader.blendShapeList[0]
+					)
 
 		# Decode modern blend shape formats before the legacy path
 		wildsBlendShapeDict = None

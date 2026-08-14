@@ -3643,8 +3643,8 @@ def ParsedREMeshToREMesh(parsedMesh, meshVersion):
         reMesh.meshBufferHeader.vertexElementList.append(vertexElement)
         reMesh.meshBufferHeader.vertexBuffer.extend(extraWeightBuffer.getvalue())
 
-    # Pragmata typing-2 tail (retail ch0100_10): after declared vertex elements the buffer is
-    #   [normal-recalc / aux][u32 vert map][float16 xyz deltas]
+    # Pragmata typing-2 tail: after declared vertex elements the buffer is
+    #   [aux 16*nverts][extra 896][u32 vert map][float16 xyz deltas]
     # MeshBufferHeader.sunbreakSecondUnknown holds (mapOffset, deltaOffset) as two u32s.
     # Putting deltas at the geometry end (and leaving those offsets 0) makes the face shader
     # fail to bind — eyes/teeth still draw because they are not morph targets.
@@ -3746,6 +3746,8 @@ def ParsedREMeshToREMesh(parsedMesh, meshVersion):
         + reMesh.meshBufferHeader.faceBufferSize,
         16,
     )
+    # DD2 secondary weights reuse sunbreakSecondUnknown as a byte length. Pragmata/RE9
+    # store (mapOffset, deltaOffset) there; do not overwrite it.
     if version >= VERSION_DD2 and version not in (VERSION_PRAG, VERSION_RE9):
         if parsedMesh.bufferHasSecondaryWeight:
             reMesh.meshBufferHeader.sunbreakOffset = (

@@ -101,7 +101,7 @@ VERSION_DR = 125  # file:240424828,internal:240423829
 # VERSION_MHWILDS = 130#file:240820143,internal:240704828# beta
 VERSION_ONI2 = 127  # file:240827123,internal:240827123
 VERSION_MHWILDS = 130  # file:241111606,internal:240704828
-VERSION_PRAGDEMO = 135  # file:250925211,internal:250707828
+VERSION_PRAG = 135  # file:251121828,internal:250707828
 VERSION_MHS3 = 136  # file:250604100,internal:250203152
 VERSION_RE9 = 140  # file:250925211,internal:250707828#RE9 Placeholder
 
@@ -110,7 +110,7 @@ SIX_WEIGHT_GAMES = frozenset(
         VERSION_SF6,
         VERSION_MHWILDS,
         VERSION_MHS3,
-        VERSION_PRAGDEMO,
+        VERSION_PRAG,
     ]
 )
 
@@ -133,8 +133,8 @@ meshFileVersionToNewVersionDict = {
     240827123: VERSION_ONI2,
     241111606: VERSION_MHWILDS,
     250604100: VERSION_MHS3,
-    # 250925211:VERSION_PRAGDEMO,
     250925211: VERSION_RE9,
+    251121828: VERSION_PRAG,
 }
 newVersionToMeshFileVersion = {
     VERSION_DMC5: 1808282334,
@@ -153,7 +153,7 @@ newVersionToMeshFileVersion = {
     VERSION_ONI2: 240820143,
     VERSION_MHWILDS: 241111606,
     VERSION_MHS3: 250604100,
-    # VERSION_PRAGDEMO:250925211,
+    # VERSION_PRAG: 251121828,
     VERSION_RE9: 250925211,
 }
 meshFileVersionToInternalVersionDict = {
@@ -173,8 +173,8 @@ meshFileVersionToInternalVersionDict = {
     240827123: 240704828,  # VERSION_ONI2
     241111606: 240704828,  # VERSION_MHWILDS
     250604100: 250203152,  # VERSION_MHS3
-    # 250925211:250707828,#VERSION_PRAGDEMO
     250925211: 250904410,  # VERSION_RE9
+    251121828: 250707828,  # VERSION_PRAG
 }
 internalVersionToMeshFileVersionDict = {
     386270720: 1808282334,  # VERSION_DMC5
@@ -193,7 +193,7 @@ internalVersionToMeshFileVersionDict = {
     240704828: 240820143,  # VERSION_ONI2
     240704828: 241111606,  # VERSION_MHWILDS
     250203152: 250604100,  # VERSION_MHS3
-    250707828: 250925211,  # VERSION_PRAGDEMO
+    250707828: 251121828,  # VERSION_PRAG
     250904410: 250925211,  # VERSION_RE9
 }
 meshFileVersionToGameNameDict = {
@@ -215,8 +215,8 @@ meshFileVersionToGameNameDict = {
     240827123: "ONI2",  # VERSION_ONI2
     241111606: "MHWILDS",  # VERSION_MHWILDS
     250604100: "MHS3",  # VERSION_MHS3
-    # 250925211:"PRAG",#VERSION_PRAGDEMO
     250925211: "RE9",  # VERSION_RE9
+    251121828: "PRAG", # VERSION_PRAG
 }
 
 
@@ -703,7 +703,7 @@ class StreamingBufferHeaderEntry:
         self.vertexBufferLength = read_uint(file)
         self.mainVertexElementCount = read_ushort(file)
         self.vertexElementCount = read_ushort(file)
-        if version >= VERSION_PRAGDEMO:
+        if version >= VERSION_PRAG:
             self.prag_unknOffset0 = read_uint64(file)
             self.prag_unknOffset1 = read_uint64(file)
         self.unpaddedBufferSize = read_uint(file)
@@ -724,7 +724,7 @@ class StreamingBufferHeaderEntry:
         write_uint(file, self.vertexBufferLength)
         write_ushort(file, self.mainVertexElementCount)
         write_ushort(file, self.vertexElementCount)
-        if version >= VERSION_PRAGDEMO:
+        if version >= VERSION_PRAG:
             write_uint64(file, self.prag_unknOffset0)
             write_uint64(file, self.prag_unknOffset1)
         write_uint(file, self.unpaddedBufferSize)
@@ -814,7 +814,7 @@ class MeshBufferHeader:
             self.faceBufferOffset = self.vertexBufferOffset + self.vertexBufferSize
             self.mainVertexElementCount = read_ushort(file)
             self.vertexElementCount = read_ushort(file)
-            if version >= VERSION_PRAGDEMO:
+            if version >= VERSION_PRAG:
                 self.prag_unknOffset0 = read_uint64(file)
                 self.prag_unknOffset1 = read_uint64(file)
             self.block2FaceBufferOffset = read_uint(file)
@@ -935,7 +935,7 @@ class MeshBufferHeader:
             write_uint(file, self.vertexBufferSize)
             write_ushort(file, self.mainVertexElementCount)
             write_ushort(file, self.vertexElementCount)
-            if version >= VERSION_PRAGDEMO:
+            if version >= VERSION_PRAG:
                 write_uint64(file, self.prag_unknOffset0)
                 write_uint64(file, self.prag_unknOffset1)
             write_uint(file, self.block2FaceBufferOffset)
@@ -2586,7 +2586,7 @@ class sizeData:
         if version >= VERSION_DR:
             self.MATERIAL_SUBDIVISION_SIZE = 32
 
-        if version >= VERSION_PRAGDEMO:
+        if version >= VERSION_PRAG:
             self.VERTEX_ELEMENT_OFFSET = 96
 
         self.VERTEX_ELEMENT_SIZE = 8
@@ -2789,7 +2789,7 @@ def ParsedREMeshToREMesh(parsedMesh, meshVersion):
             reMesh.lodHeader.skinWeightCount = 9
         elif version == VERSION_MHWILDS:
             reMesh.lodHeader.skinWeightCount = 25  # Not sure why but this fixes monsters causing crashes and dead hitbox issues
-        elif version == VERSION_PRAGDEMO:
+        elif version == VERSION_PRAG:
             reMesh.lodHeader.skinWeightCount = 27  #
         elif version == VERSION_RE9:
             reMesh.lodHeader.skinWeightCount = 18  #

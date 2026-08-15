@@ -588,6 +588,7 @@ class ClusterInfo:
         self.bitFlag = None
 
         self.faceBuffer = bytes()
+        self.weightBuffer = None
         self.vertexBuffer = bytes()
 
     def read(self, file, version):
@@ -687,7 +688,16 @@ class ClusterInfo:
                 self.colorBuffer = file.read(self.vertexCount * COLOR_STRIDE)
         else:
             self.colorBuffer = None
-        # TODO find something that uses weights
+
+        # Compressed skinning stores one shared 16 byte record per cluster
+        # Uncompressed skinning stores one 16 byte record per vertex
+        if self.bitFlag.flags.isMeshletUseSkinned:
+            if self.bitFlag.flags.isMeshletCompressedSkinned:
+                self.weightBuffer = file.read(16) * self.vertexCount
+            else:
+                self.weightBuffer = file.read(self.vertexCount * 16)
+        else:
+            self.weightBuffer = None
 
     def write(self, file):
         pass

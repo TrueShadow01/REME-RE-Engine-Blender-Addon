@@ -400,6 +400,102 @@ class BlendShape:
 		self.deltas = []
 
 
+def _decodePragBlendShapes(reMesh):
+	"""Decode resident Pragmata blend shape deltas"""
+
+	result = {}
+	reMesh.wildsBlendMeta = {}
+
+	bsh = reMesh.blendShapeHeader
+	mbh = reMesh.meshBufferHeader
+	if bsh is None or mbh is None or mbh.vertexBuffer is None:
+		return result
+
+	def shapeName(shapeIndex):
+		remap = reMesh.blendShapeNameRemapList
+		if remap:
+			rawNameIndex = remap[shapeIndex % len(remap)]
+			if 0 <= rawNameIndex < len(reMesh.rawNameList):
+				return reMesh.rawNameList[rawNameIndex]
+
+		return f"BlendShape_{shapeIndex}"
+
+	# The upper 32 bits contain the delta buffer offset relative to vertexBufferOffset
+	cursor = mbh.sunbreakSecondUnknown >> 32
+	if cursor >= len(mbh.vertexBuffer):
+		print(f"Pragmata blend shape offset {cursor} exceeds vertex buffer size {len(mbh.vertexBuffer)}")
+		return result
+
+	for lodIndex, blendShapeData in enumerate(bsh.blendShapeList):
+		lodDict = {}
+
+
+		for targetIndex, blendTarget in enumerate(blendShapeData.blendTargetList):
+			subEntries = (
+				blendTarget.subMeshEntryList
+				if blendTarget.subMeshEntryList else [blendTarget]
+			)
+
+			totalVerts = sum(
+				getattr(subEntry, "vertCount", 0)
+				for subEntry in subEntries
+			)
+
+			shapeCount = blendTarget.blendShapeNum
+
+			if totalVerts == 0 or shapeCount == 0:
+				continue
+
+			if blendShapeData.padding1 == 0:
+				stride = 4
+			elif blendShapeData.padding1 == 1:
+				stride = 8
+			else:
+				print(f"Unsupported Pragmata blend shape padding value: {blendShapeData.padding1}")
+				return result
+
+			byteCount = shapeCount * totalVerts * stride
+			if cursor + byteCount > len(mbh.vertexBuffer):
+				print(f"Pragmata blend shape block exceeds vertex buffer: {cursor} + {byteCount} > {len(mbh.vertexBuffer)}")
+				return result
+
+			block = memoryview(mbh.vertexBuffer)[cursor : cursor + byteCount]
+			cursor += byteCount
+
+			if blendShapeData.padding1 == 1:
+				# 4 float16 values per vertex, xyz are direct deltas and w is unused
+				deltas = np.frombuffer(block, dtype="<f2").reshape(shapeCount, totalVerts, 4)[..., :3].astype(np.float32)
+			else:
+				# Packed 11/10/11 values are normalized and remapped through the target AABB
+				normalized = ReadBlendShapeByteBuffer(block, tags=set()).reshape(shapeCount, totalVerts, 3)
+
+				aabb = (
+					blendShapeData.aabbList[targetIndex]
+					if targetIndex < len(blendShapeData.aabbList)
+					else AABB()
+				)
+
+				deltas = remapBlendShapeDeltas(normalized.reshape(-1, 3), aabb).reshape(shapeCount, totalVerts, 3)
+
+			subEntryOffset = 0
+			for subEntry in subEntries:
+				subEntryVertCount = getattr(subEntry, "vertCount", 0)
+				subMeshStart = getattr(subEntry, "subMeshVertexStartIndex", 0)
+				shapeList = lodDict.setdefault(subMeshStart, [])
+
+				for shapeIndex in range(shapeCount):
+					entry = BlendShape()
+					entry.blendShapeName = shapeName(getattr(blendTarget, "blendSSIndex", 0) + shapeIndex)
+					entry.deltas = np.array(deltas[shapeIndex, subEntryOffset: subEntryOffset + subEntryVertCount], dtype=np.float32)
+					shapeList.append(entry)
+
+				subEntryOffset += subEntryVertCount
+
+		if lodDict:
+			result[lodIndex] = lodDict
+
+	return result
+
 def _decodeWildsBlendShapes(reMesh):
 	"""Decode MH Wilds blend shape deltas into ``{lodIndex: {subMeshVertexStartIndex: [BlendShape, ...]}}``.
 
@@ -1170,9 +1266,15 @@ class ParsedREMesh:
 			)
 			blendShapeBuffer = reMesh.meshBufferHeader.vertexBuffer[blendShapeStartPos:]
 
-		# Decode MH Wilds-era packed blend shapes up front from the streaming buffer tails.
+		# Decode modern blend shape formats before the legacy path
 		wildsBlendShapeDict = None
 		if (
+			reMesh.meshVersion == VERSION_PRAG
+			and reMesh.blendShapeHeader is not None
+			and len(reMesh.blendShapeHeader.blendShapeList) > 0
+		):
+			wildsBlendShapeDict = _decodePragBlendShapes(reMesh)
+		elif (
 			reMesh.meshVersion in PACKED_BLEND_SHAPE_MESH_VERSIONS
 			and reMesh.blendShapeHeader is not None
 			and len(reMesh.blendShapeHeader.blendShapeList) > 0

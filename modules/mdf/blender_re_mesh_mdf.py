@@ -107,7 +107,8 @@ albedoTypeSet = set([
 	"Moon_Tex",
 	"Sky_Top_Tex",
 	"RTReflectionBaseMap",
-	#"IrisBaseMap"
+	#"IrisBaseMap",
+	"UniqueAlbedoOcclusionMap"
 
 	])
 normalTypeSet = set([
@@ -135,6 +136,7 @@ normalTypeSet = set([
 	"NRRTMap",
 	"Tex_Normal",
 	"IrisNormalMap",
+	"NormalOcclusionCavityMap",
 	"NormalOcclusionFilmMap",
 	])
 
@@ -867,7 +869,9 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 					if textureType in albedoVertexColorTypeSet or textureType in normalVertexColorTypeSet:
 						hasVertexColor = True
 					if textureType in albedoTypeSet:
-						if textureType in ("BaseDielectricMap", "BaseDielectricMap1", "BaseDielectricMap2", "BaseDielectricMapArray", "BaseDielectricMapBase", "SecondaryAlbedoMap"):
+						if gameName == "PRAG" and textureType == "UniqueAlbedoOcclusionMap":
+							textureNodeInfoList.append(("PRAGHAIR", textureType, imageList, outputPath))
+						elif textureType in ("BaseDielectricMap", "BaseDielectricMap1", "BaseDielectricMap2", "BaseDielectricMapArray", "BaseDielectricMapBase", "SecondaryAlbedoMap"):
 							textureNodeInfoList.append(("ALBD",textureType,imageList,outputPath))
 						elif textureType == "BaseMetalMap" or textureType == "BaseMetalMapArray":
 							textureNodeInfoList.append(("ALBM",textureType,imageList,outputPath))
@@ -1605,8 +1609,8 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 					matInfo["albedoNodeLayerGroup"].addMixLayer(baseColorNode.outputs["Color"],factorOutSocket = baseColorFactorSocket,mixType = "MULTIPLY",mixFactor = 1.0)
 				#mmtr specific nodes
 				#if "eye" in matInfo["mmtrName"]:
-				if "eye" in matInfo["blenderMaterial"].name or "eye" in matInfo["mmtrName"] or matInfo["mmtrName"].endswith("_ao.mmtr"):
-					#Tearline mat setup
+				if "eye" in matInfo["blenderMaterial"].name.lower() or "eye" in matInfo["mmtrName"].lower() or matInfo["mmtrName"].lower().endswith("_ao.mmtr"):
+					# Tearline and eye-shell material setup
 					if "FakeSpecular" in matInfo["textureNodeDict"]:
 						if matInfo["gameName"] == "RE9":
 							eyeShellAlphaNode = nodes.new("ShaderNodeMath")
@@ -1616,9 +1620,10 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 							eyeShellAlphaNode.inputs[1].default_value = 0.5
 							links.new(nodes["FakeSpecular"].outputs["Color"], eyeShellAlphaNode.inputs[0])
 							matInfo["alphaSocket"] = eyeShellAlphaNode.outputs["Value"]
-							matInfo["isAlphaBlend"] = True
 						else:
 							matInfo["alphaSocket"] = nodes["FakeSpecular"].outputs["Color"]
+
+						matInfo["isAlphaBlend"] = True
 					if "TearColor" in matInfo["mPropDict"]:  
 						baseColorNode = addPropertyNode(matInfo["mPropDict"]["TearColor"], matInfo["currentPropPos"], nodeTree)
 						matInfo["albedoNodeLayerGroup"].addMixLayer(baseColorNode.outputs["Color"],factorOutSocket = None,mixType = "MULTIPLY",mixFactor = 1.0)
@@ -1980,6 +1985,55 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 					clampNode.location = (matInfo["roughnessNodeLayerGroup"].currentOutSocket.node.location[0]+300,matInfo["roughnessNodeLayerGroup"].currentOutSocket.node.location[1])
 					links.new(matInfo["roughnessNodeLayerGroup"].currentOutSocket,clampNode.inputs["Value"])
 					links.new(clampNode.outputs["Result"],nodeBSDF.inputs["Roughness"])
+
+				# Pragmata primary hair highlight approximation
+				if matInfo["gameName"] == "PRAG" and "hair" in matInfo["mmtrName"].lower() and "Aniso1_PrimalyAnisotropy" in matInfo["mPropDict"]:
+					hairTangentNode = nodes.new("ShaderNodeTangent")
+					hairTangentNode.name = "PRAG Hair Tangent"
+					hairTangentNode.direction_type = "UV_MAP"
+					hairTangentNode.uv_map = "UVMap0"
+
+					links.new(hairTangentNode.outputs["Tangent"], nodeBSDF.inputs["Tangent"])
+
+					hairAnisotropyNode = addPropertyNode(
+						matInfo["mPropDict"]["Aniso1_PrimalyAnisotropy"],
+						matInfo["currentPropPos"],
+						nodeTree
+					)
+
+					links.new(hairAnisotropyNode.outputs["Value"], nodeBSDF.inputs["Anisotropic"])
+
+					if "AnisoSpecular1_Intensity" in matInfo["mPropDict"]:
+						hairSpecularNode = addPropertyNode(
+							matInfo["mPropDict"]["AnisoSpecular1_Intensity"],
+							matInfo["currentPropPos"],
+							nodeTree
+						)
+
+						links.new(hairSpecularNode.outputs["Value"], nodeBSDF.inputs["Specular IOR Level"])
+
+					if "AnisoSpecular1_Sharpness" in matInfo["mPropDict"]:
+						hairSharpnessNode = addPropertyNode(
+							matInfo["mPropDict"]["AnisoSpecular1_Sharpness"],
+							matInfo["currentPropPos"],
+							nodeTree
+						)
+
+						hairSharpnessAddNode = nodes.new("ShaderNodeMath")
+						hairSharpnessAddNode.name = "PRAG Hair Sharpness Plus One"
+						hairSharpnessAddNode.operation = "ADD"
+						hairSharpnessAddNode.inputs[1].default_value = 1.0
+
+						links.new(hairSharpnessNode.outputs["Value"], hairSharpnessAddNode.inputs[0])
+
+						hairRoughnessNode = nodes.new("ShaderNodeMath")
+						hairRoughnessNode.name = "PRAG Hair Highlight Roughness"
+						hairRoughnessNode.operation = "POWER"
+						hairRoughnessNode.inputs[1].default_value = -0.2
+						hairRoughnessNode.use_clamp = True
+
+						links.new(hairSharpnessAddNode.outputs["Value"], hairRoughnessNode.inputs[0])
+						links.new(hairRoughnessNode.outputs["Value"], nodeBSDF.inputs["Roughness"])
 				
 				if matInfo["metallicNodeLayerGroup"].currentOutSocket != None:
 					clampNode = nodes.new("ShaderNodeClamp")

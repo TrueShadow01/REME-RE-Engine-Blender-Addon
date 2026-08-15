@@ -830,6 +830,15 @@ def newALBANode (nodeTree,textureType,matInfo):
 		matInfo["alphaSocket"] = imageNode.outputs["Alpha"]
 
 	return imageNode
+
+def newPRAGHairUniqueNode(nodeTree, textureType, matInfo):
+	imageNode = nodeTree.nodes[textureType]
+
+	# Pragmata's unique hair albedo is coupled to its parallax shader
+	# Applying it directly to flat hair cards exposes the texture cells
+
+	return imageNode
+
 def newALBNode (nodeTree,textureType,matInfo):
 	imageNode = nodeTree.nodes[textureType]
 	currentPos = [imageNode.location[0] + 300,imageNode.location[1]]
@@ -1133,12 +1142,53 @@ def newNRRTNode (nodeTree,textureType,matInfo):
 	nodeTree.links.new(imageNode.outputs["Color"],nodeGroupNode.inputs["Color"])
 	nodeTree.links.new(imageNode.outputs["Alpha"],nodeGroupNode.inputs["Alpha"])
 	matInfo["normalNodeLayerGroup"].addMixLayer(nodeGroupNode.outputs["Color"])
-	matInfo["roughnessNodeLayerGroup"].addMixLayer(nodeGroupNode.outputs["Roughness"])
-	
-	
-	if textureType == "NormalRoughnessCavityMap":
+
+	if textureType != "NormalOcclusionCavityMap":
+		matInfo["roughnessNodeLayerGroup"].addMixLayer(nodeGroupNode.outputs["Roughness"])
+	if textureType == "NormalOcclusionCavityMap":
+		occlusionSocket = nodeGroupNode.outputs["Roughness"]
+
+		if "PatternOcclusion" in matInfo["mPropDict"]:
+			patternOcclusionNode = addPropertyNode(
+				matInfo["mPropDict"]["PatternOcclusion"],
+				matInfo["currentPropPos"],
+				nodeTree
+			)
+
+			occlusionMixNode = nodeTree.nodes.new("ShaderNodeMixRGB")
+			occlusionMixNode.name = "NROC Pattern Occlusion Strength"
+			occlusionMixNode.blend_type = "MIX"
+			occlusionMixNode.inputs["Color1"].default_value = (1.0, 1.0, 1.0, 1.0)
+
+			nodeTree.links.new(patternOcclusionNode.outputs["Value"], occlusionMixNode.inputs["Fac"])
+			nodeTree.links.new(nodeGroupNode.outputs["Roughness"], occlusionMixNode.inputs["Color2"])
+
+			occlusionSocket = occlusionMixNode.outputs["Color"]
+
+		matInfo["aoNodeLayerGroup"].addMixLayer(occlusionSocket)
+
+		cavitySocket = nodeGroupNode.outputs["BlueChannel"]
+
+		if "PatternCavity" in matInfo["mPropDict"]:
+			patternCavityNode = addPropertyNode(
+				matInfo["mPropDict"]["PatternCavity"],
+				matInfo["currentPropPos"],
+				nodeTree
+			)
+
+			cavityMixNode = nodeTree.nodes.new("ShaderNodeMixRGB")
+			cavityMixNode.name = "NROC Pattern Cavity Strength"
+			cavityMixNode.blend_type = "MIX"
+			cavityMixNode.inputs["Color1"].default_value = (1.0, 1.0, 1.0, 1.0)
+
+			nodeTree.links.new(patternCavityNode.outputs["Value"], cavityMixNode.inputs["Fac"])
+			nodeTree.links.new(nodeGroupNode.outputs["BlueChannel"], cavityMixNode.inputs["Color2"])
+
+			cavitySocket = cavityMixNode.outputs["Color"]
+
+		matInfo["cavityNodeLayerGroup"].addMixLayer(cavitySocket)
+	elif textureType == "NormalRoughnessCavityMap":
 		matInfo["cavityNodeLayerGroup"].addMixLayer(nodeGroupNode.outputs["BlueChannel"])
-		
 	elif textureType == "NormalRoughnessOcclusionMap":
 		
 		if occlusionUV2Node != None:
@@ -2423,6 +2473,7 @@ nodeDict = {
 	"SF6BODYDETAIL": newSF6BodyDetailNode,
 	"SF6FACEDETAIL": newSF6FaceDetailNode,
 	"SF6WRINKLE": newSF6FacialWrinkleNode,
+	"PRAGHAIR": newPRAGHairUniqueNode,
 	}
 def addTextureNode(nodeTree,nodeType,textureType,matInfo):
 	#print(nodeType)

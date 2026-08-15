@@ -699,8 +699,13 @@ def importMesh(
         # print("Importing secondary weights")
         # Only create vertex groups for bones that get used
         usedBoneIndices = sorted(
-            list({x for vertex in vertexGroupBoneIndicesListSecondary for x in vertex})
-        )  # Get all used bone indices in hierarchy order
+            {
+                boneIndex
+                for boneIndexList, weightList in zip(vertexGroupBoneIndicesListSecondary, vertexGroupWeightListSecondary)
+                for boneIndex, weight in zip(boneIndexList, weightList)
+                if weight > 0
+            }
+        )  # Only create groups that receive an actual secondary weight
         # print(boneNameList)
         if len(boneNameList) > 1:
             # print(boneNameList)

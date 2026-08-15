@@ -380,7 +380,7 @@ def findMDFPathFromMeshPath(meshPath,gameName = None):
 		".241111606":".45",#MHWILDS
 		".240827123":".46",#ONI2
 		".250604100":".49",#MHS3
-		#".250925211":".51",#PRAG
+		".251121828":".51",#PRAG
 		".250925211":".51",#RE9
 		
 		
@@ -487,12 +487,18 @@ texVersionDict = {
 	#40:".760230703",
 	45:".241106027",
 	51:".250813143",
-  }	
-def getTexPath(baseTexturePath,chunkPathList,mdfVersion):
+  }
+
+# Preserve RE9's texture version because MDF version 51 is shared with Pragmata
+gameTexVersionDict = {
+	"PRAG": ".251111100"
+}
+
+def getTexPath(baseTexturePath,chunkPathList,mdfVersion, gameName = None):
 	
 	
 	inputPath = None
-	texVersion = texVersionDict.get(mdfVersion, None)
+	texVersion = gameTexVersionDict.get(gameName, texVersionDict.get(mdfVersion, None))
 	for chunkPath in chunkPathList:
 		# Try version-specific first (if known)
 		if texVersion:
@@ -833,7 +839,7 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 					baseTexturePath = texture.replace("@","").replace(".tex","").replace('/',os.sep)
 					outputPath = os.path.join(TEXTURE_CACHE_DIR,baseTexturePath+".png")
 					
-					texPath = getTexPath(baseTexturePath,chunkPathList,mdfVersion)
+					texPath = getTexPath(baseTexturePath, chunkPathList, mdfVersion, gameName)
 					
 					if texPath != None:
 						if texPath not in loadedImageDict:

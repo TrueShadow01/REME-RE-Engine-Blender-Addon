@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
 gameNameToTexVersionDict = {
 	"DMC5":11,
 	"RE2":10,
@@ -19,6 +18,6 @@ gameNameToTexVersionDict = {
 	"MHWILDS":241106027,
 	"ONI2":240701001,
 	"MHS3":251111100,
-	"PRAG":250813143,
+	"PRAG":251111100,
 	"RE9":250813143,
 	}

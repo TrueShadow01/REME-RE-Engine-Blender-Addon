@@ -146,7 +146,11 @@ SF6 Color Index: 1
 
 Retail Pragmata character meshes use **`typing` 2** blend shapes (IEEE float16 xyz in the vertex-buffer tail), not MH Wilds packed 11/10/11 deltas. Extra-weight (vertex element type 7) is a second bone-index pack, not a 7th–12th influence.
 
-Same-topology round-trip (sculpt in place, reorder verts, keep vertex count) is supported because retail weight / extra-weight / morph-aux streams are stored on the `.blend` at import and pasted back on export. Vertex-group weight-paint edits are not written. A remesh cannot invent those tables.
+Export is a **paste-back** of imported type-4 / type-7 / morph-aux tables. Blender cannot invent those streams.
+
+**Not supported:** remesh, retopo, dissolve, add/delete verts, or any vertex-count change; weight-paint / vertex-group edits (groups are ignored on write); `autoSolveRepeatedUVs` / `preserveSharpEdges` on a morphing face (they split verts and drop `pragmata_*`); exporting a face that was never imported with this persist path; building a new extra-weight or aux table from Blender data.
+
+**Allowed edits** (imported tables must still line up): move existing verts; reorder existing verts (`pragmata_src_index` permutation); edit shape-key **deltas**. Vertex count, armature, and the pasted streams must stay. Same-topology sculpt is the supported sculpt path because it is the only one that does not break those tables.
 
 Details, buffer layout, and approaches that fail: **[docs/PRAGMATA.md](docs/PRAGMATA.md)**.
 
@@ -155,8 +159,10 @@ Details, buffer layout, and approaches that fail: **[docs/PRAGMATA.md](docs/PRAG
 - Monster Hunter Wilds support remains experimental
 - Static Pragmata MPLY environment geometry is supported but skinned MPLY clusters do not reconstruct joint weights yet
 - Pragmata hair uses its NROC maps and a primary anisotropic highlight approximation, parallax-coupled unique albedo and secondary hair lobes are not reconstructed
-- Pragmata face remesh (changed vertex count) cannot round-trip extra-weight or morph aux
+- Pragmata face remesh, retopo, dissolve, add/delete verts, or any vertex-count change cannot round-trip extra-weight or morph aux (those tables cannot be invented)
 - Pragmata export pastes imported type-4/type-7 streams; vertex-group weight paint is not written
+- Pragmata `autoSolveRepeatedUVs` / `preserveSharpEdges` on a morphing face split verts and drop `pragmata_*` attributes
+- Pragmata face export requires a persist import (`pragmata_*` on the `.blend`); a mesh never imported with this path cannot round-trip extra-weight / aux
 - Blend-shape support varies by game and mesh format
 - SF6 blend shapes are kept at zero by default
 - Automatic SF6 JCNS pose-corrective drivers are disabled while their vertex mapping remains experimental

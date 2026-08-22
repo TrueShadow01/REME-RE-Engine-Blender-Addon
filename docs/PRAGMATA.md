@@ -9,13 +9,25 @@ This document is the format note for the code under `modules/mesh/`. It is writt
 | Area | State |
 |---|---|
 | Import `.mesh.251121828` | Working. Positions, UVs, 6-bone weights, colors, armature, and `typing` 2 shape keys. |
-| Export same-topology round-trip | Working if the mesh was imported with this addon (retail streams persist on the `.blend`). |
-| Reorder vertices | Working. `pragmata_src_index` restores retail order on export. |
-| Remesh / change vertex count | **Not supported** for faces that use extra-weight + morph aux. Blender cannot invent those tables. |
+| Export (paste-back) | Working **only** if the mesh was imported with this addon so retail streams persist on the `.blend`. |
+| Allowed edits | Move existing verts; reorder existing verts (`pragmata_src_index` permutation); edit shape-key **deltas**. Count, armature, and pasted streams must stay. |
+| Remesh / change vertex count | **Not supported.** Extra-weight and morph aux cannot be invented. |
 | Materials / MDF reconstruction | Preliminary (`mdf2.51`). Pink/grey viewport is expected without extracted textures. |
 | Export UI | Choose **Pragmata** (`.251121828`). Do not export a Pragmata mesh as RE9 (`.250925211`). |
 
 Worked example: default-outfit head `natives/stm/character/ch/ch01/ch0100/10/ch0100_10.mesh.251121828` (vanilla size 14 923 584 bytes). Eight submeshes; only `Face_mat` (10 982 verts) carries 107 `Neutral_geo_cbs.crct_*` keys.
+
+## Not supported
+
+This exporter pastes imported type-4 / type-7 / aux tables. It is not a general mesh pipeline.
+
+- Remesh, retopo, dissolve, add/delete verts, or any **vertex-count** change
+- Weight-paint / vertex-group edits (type-4 and type-7 bytes are pasted from import; groups are ignored on write)
+- `autoSolveRepeatedUVs` / `preserveSharpEdges` on a morphing face (they split verts and drop `pragmata_*`)
+- Exporting a face that was never imported with this persist path (no `pragmata_*` attributes / collection props)
+- Building a new extra-weight or aux table from Blender data
+
+Same-topology sculpt is the supported sculpt path because it is the only one that does not break those tables — not because remesh is planned.
 
 ## Versions
 
@@ -27,7 +39,7 @@ Worked example: default-outfit head `natives/stm/character/ch/ch01/ch0100/10/ch0
 | Game name | `PRAG` |
 | Blend-shape file-version set | `PRAGMATA_BLEND_SHAPE_FILE_VERSIONS` in `file_re_mesh.py` |
 | MDF | `.mdf2.51` |
-| TEX | `250813143` |
+| TEX | `251111100` |
 
 `250925211` is the **RE9** mesh extension (`VERSION_RE9`). Only `251121828` remaps to `VERSION_PRAG` and is listed in `PRAGMATA_BLEND_SHAPE_FILE_VERSIONS`.
 
@@ -73,7 +85,7 @@ Type 7 is **not** “more influences.” The face shader fetches a second 16-byt
 
 The main 6-weight pack (type 4) uses pad bits **`0b11`** in the compressed index word (`weightIndexPad = 3` for `VERSION_PRAG`).
 
-Blender vertex groups cannot represent the type-7 pack. Import stores **both** type-4 and type-7 as raw INT attributes (see below) and export **pastes those bytes back** when vertex count still matches. Weight-paint edits to vertex groups are not written; the imported streams win so the face shader keeps the extra index pack. Same-topology sculpt (move verts, keep count and armature) is the supported path.
+Blender vertex groups cannot represent the type-7 pack. Import stores **both** type-4 and type-7 as raw INT attributes (see below) and export **pastes those bytes back** when vertex count still matches. Weight-paint edits to vertex groups are not written; the imported streams win so the face shader keeps the extra index pack. The only sculpt path that keeps those tables is moving existing verts (same count, same armature).
 
 ## Blend-shape header field order
 
@@ -117,9 +129,9 @@ On the RE mesh collection:
 
 Export (`assemblePragmataBlendAux`) rebuilds `parsedMesh.pragmataBlendAux` from those properties only. If any submesh is missing `pragmata_wt_*` / `pragmata_ew_*`, retail skinning streams are **not** written. When they are present they replace the buffers built from Blender vertex groups (type 4 and type 7).
 
-`pragmata_src_index` must be a complete `nverts`-long range (a permutation). That is a **reorder**, not a remesh. Changing vertex count, dissolving verts, or adding verts breaks the tables.
+`pragmata_src_index` must remain a complete `nverts`-long permutation of the imported range. Changing vertex count **breaks** the tables. Dissolve, add verts, remesh, or `autoSolveRepeatedUVs` / `preserveSharpEdges` (vert splits) are not supported.
 
-Same-topology sculpt (move verts, keep count, keep armature) can keep using the stored tables. Shape-key *deltas* always come from Blender keys (float16 xyz), not from a pasted vanilla tail.
+Moving existing verts (same count, same armature) can keep using the stored tables. Reorder is a permutation of that range, not a remesh. Shape-key *deltas* always come from Blender keys (float16 xyz), not from a pasted vanilla tail.
 
 ## Code map
 

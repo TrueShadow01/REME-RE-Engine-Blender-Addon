@@ -33,17 +33,6 @@ class PragmataBlendTests(unittest.TestCase):
     def setUpClass(cls):
         cls.file_re_mesh, cls.re_mesh_parse = _load_mesh_modules()
 
-    def test_float16_buffer_drops_unused_fourth_half(self):
-        rec = np.zeros((4, 4), dtype="<f2")
-        rec[0] = (1.0, -2.0, 0.5, 99.0)
-        rec[1] = (0.0, 0.0, 0.0, 1.0)
-        rec[2] = (-0.125, 8.0, 0.00390625, 0.0)
-        rec[3] = (100.0, -100.0, 0.0, 0.0)
-        out = self.re_mesh_parse.ReadBlendShapeFloat16Buffer(rec.tobytes(), tags=set())
-        self.assertEqual(out.shape, (4, 3))
-        self.assertTrue(np.allclose(out[0], (1.0, -2.0, 0.5), atol=1e-3))
-        self.assertTrue(np.allclose(out[2], (-0.125, 8.0, 0.00390625), atol=1e-3))
-
     def test_blend_shape_name_prefix(self):
         name = self.file_re_mesh._pragmataBlendShapeName
         self.assertEqual(name("crct_eye"), "Neutral_geo_cbs.crct_eye")
@@ -261,6 +250,7 @@ class PragmataBlendTests(unittest.TestCase):
                 ok, error = validate(chunks, storedCount)
                 self.assertFalse(ok)
                 self.assertTrue(error)
+
 
 if __name__ == "__main__":
     unittest.main()

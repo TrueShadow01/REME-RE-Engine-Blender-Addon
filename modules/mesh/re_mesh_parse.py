@@ -264,16 +264,6 @@ def ReadBlendShapeShortBuffer(blendShapeBuffer, tags):
 	blendShapeArray /= 65535
 	return blendShapeArray
 
-
-def ReadBlendShapeFloat16Buffer(blendShapeBuffer, tags):
-	recordSize = 8
-	usableSize = len(blendShapeBuffer) - (len(blendShapeBuffer) % recordSize)
-	if usableSize != len(blendShapeBuffer):
-		print(f"Blend shape f16 contains {len(blendShapeBuffer) - usableSize} trailing padding bytes.")
-	arr = np.frombuffer(memoryview(blendShapeBuffer)[:usableSize], dtype="<f2").reshape(-1, 4)
-	return arr[:, :3].astype(np.float32)
-
-
 def remapBlendShapeDeltas(blendShapeDeltas,aabb,zeroIsSentinel=False):
 	# SF6 uses an all 0 encoded record to mean no vertex delta.
 	# Preserve that mask before applying the target AABB remapping
@@ -765,24 +755,16 @@ def parseLODStructure(
 			# print(f"LOD Index {str(lodIndex)}")
 			# Guard against an out-of-range typing (e.g. Wilds typing=7); Wilds is handled by the
 			# packed decode path above, so this legacy path only runs for SF6 and earlier.
-			# Pragmata typing 2 is IEEE float16 xyz (not AABB-unorm shorts). Other games that
-			# happen to use typing 2 still go through BlendShapeShort.
-			pragmataF16 = (
-				blendShapeLODData.typing == 2
-				and reMesh.meshVersion in PRAGMATA_BLEND_SHAPE_FILE_VERSIONS
-			)
-			if pragmataF16:
-				blendShapeDeltas = ReadBlendShapeFloat16Buffer(
-					blendShapeBuffer, tags=blendShapeTags
-				)
+
+			if blendShapeLODData.typing < len(blendShapeNameMapping):
+				bufferType = blendShapeNameMapping[blendShapeLODData.typing]
 			else:
-				if blendShapeLODData.typing < len(blendShapeNameMapping):
-					bufferType = blendShapeNameMapping[blendShapeLODData.typing]
-				else:
-					bufferType = "BlendShapeShort"
-				blendShapeDeltas = BlendShapeBufferReadDict[bufferType](
-					blendShapeBuffer, tags=blendShapeTags
-				)
+				bufferType = "BlendShapeShort"
+
+			blendShapeDeltas = BlendShapeBufferReadDict[bufferType](
+				blendShapeBuffer,
+				tags=blendShapeTags,
+			)
 
 			# print(f"Delta Vert Count {str(len(blendShapeDeltas))}")
 			# (f"Delta Length {str(endOffset-currentBlendShapeOffset)}")
@@ -832,11 +814,14 @@ def parseLODStructure(
 						for subMeshEntry in blendTarget.subMeshEntryList:
 							blendShapeEntry = BlendShape()
 							blendShapeEntry.blendShapeName = blendShapeName
-							seg = blendShapeDeltas[currentBlendDeltaOffset:currentBlendDeltaOffset+subMeshEntry.vertCount]
-							if pragmataF16:
-								blendShapeEntry.deltas = np.asarray(seg, dtype=np.float32)
-							else:
-								blendShapeEntry.deltas = remapBlendShapeDeltas(seg,blendShapeLODData.aabbList[blendTargetIndex],zeroIsSentinel=reMesh.meshVersion == VERSION_SF6)
+							blendShapeEntry.deltas = remapBlendShapeDeltas(
+								blendShapeDeltas[
+									currentBlendDeltaOffset:
+									currentBlendDeltaOffset + subMeshEntry.vertCount
+								],
+								blendShapeLODData.aabbList[blendTargetIndex],
+								zeroIsSentinel=reMesh.meshVersion == VERSION_SF6,
+							)
 
 							# blendShapeEntry.deltas[:,0] -= blendShapeLODData.aabbList[blendTargetIndex].max.x
 							# blendShapeEntry.deltas[:,1] -= blendShapeLODData.aabbList[blendTargetIndex].max.y
@@ -857,11 +842,14 @@ def parseLODStructure(
 					else:
 						blendShapeEntry = BlendShape()
 						blendShapeEntry.blendShapeName = blendShapeName
-						seg = blendShapeDeltas[currentBlendDeltaOffset:currentBlendDeltaOffset+blendTarget.vertCount]
-						if pragmataF16:
-							blendShapeEntry.deltas = np.asarray(seg, dtype=np.float32)
-						else:
-							blendShapeEntry.deltas = remapBlendShapeDeltas(seg,blendShapeLODData.aabbList[blendTargetIndex],zeroIsSentinel=reMesh.meshVersion == VERSION_SF6)
+						blendShapeEntry.deltas = remapBlendShapeDeltas(
+							blendShapeDeltas[
+								currentBlendDeltaOffset:
+								currentBlendDeltaOffset + blendTarget.vertCount
+							],
+							blendShapeLODData.aabbList[blendTargetIndex],
+							zeroIsSentinel=reMesh.meshVersion == VERSION_SF6,
+						)
 
 						currentBlendDeltaOffset += blendTarget.vertCount
 						if blendTarget.subMeshVertexStartIndex in blendShapeDict:

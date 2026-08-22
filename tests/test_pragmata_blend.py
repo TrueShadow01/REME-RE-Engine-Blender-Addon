@@ -193,6 +193,41 @@ class PragmataBlendTests(unittest.TestCase):
         target0_sub_ptr = struct.unpack_from("<Q", buf, 200)[0]
         self.assertEqual(target0_sub_ptr, 16 + 96)
 
+    def test_export_rejects_multiple_morphing_submeshes(self):
+        class Dummy:
+            pass
+
+        def makeSubmesh(startIndex):
+            submesh = Dummy()
+            submesh.vertexPosList = [(0.0, 0.0, 0.0)] * 3
+            submesh.materialIndex = 0
+            submesh.blendShapeList = [object()]
+
+            submeshData = Dummy()
+            submeshData.vertexStartIndex = startIndex
+            return submesh, submeshData
+
+        firstSubmesh, firstData = makeSubmesh(0)
+        secondSubmesh, secondData = makeSubmesh(3)
+
+        viscon = Dummy()
+        viscon.subMeshList = [firstSubmesh, secondSubmesh]
+
+        lod = Dummy()
+        lod.visconGroupList = [viscon]
+
+        parsedMesh = Dummy()
+        parsedMesh.mainMeshLODList = [lod]
+
+        with self.assertRaisesRegex(Exception, "exactly one morphing submesh"):
+            self.file_re_mesh.buildPragmataBlendShapeExport(
+                parsedMesh,
+                {
+                    firstSubmesh: firstData,
+                    secondSubmesh: secondData,
+                },
+            )
+
     def test_source_indices_accept_complete_reordered_permutation(self):
         validate = self.file_re_mesh.validatePragmataSourceIndices
         ok, error = validate(

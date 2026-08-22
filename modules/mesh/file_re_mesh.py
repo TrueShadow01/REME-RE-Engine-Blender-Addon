@@ -2602,6 +2602,14 @@ def buildPragmataBlendShapeExport(parsedMesh, parsedSubMeshToSubMeshDataDict):
             matIdx = int(getattr(sm, "materialIndex", 0) or 0)
             allSubs.append((startIdx, vertCount, matIdx, bool(shapes), sm))
 
+    morphingSubs = [entry for entry in allSubs if entry[3]]
+    if len(morphingSubs) > 1:
+        raiseError(
+            "Pragmata typing-2 export supports exactly one morphing submesh, "
+            f"found {len(morphingSubs)}. Remove shape keys from every other "
+            "submesh before export."
+        )
+
     extraSubs = []
     morphStart = morphCount = morphParam = None
     origStartToExportStart = {}

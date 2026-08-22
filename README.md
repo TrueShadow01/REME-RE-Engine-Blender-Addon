@@ -82,6 +82,7 @@ REME improves alpha transparency, hair materials, face details and texture handl
 ### Experimental Newer-Format Support
 
 - Monster Hunter Wilds mesh import
+- Pragmata `.mesh.251121828` import/export with `typing` 2 blend shapes (see [docs/PRAGMATA.md](docs/PRAGMATA.md))
 - Preliminary mappings for newer RE Engine titles
 
 ## RE Asset Browser Setup
@@ -118,7 +119,7 @@ The following versions are explicitly recognized by the addon. Support can vary 
 | Onimusha 2 | `ONI2` | `240827123` | `46` | `240701001` | Limited validation |
 | Monster Hunter Wilds | `MHWILDS` | `241111606` | `45` | `241106027` | Experimental |
 | Monster Hunter Stories 3 | `MHS3` | `250604100` | `49` | `251111100` | Preliminary |
-| Pragmata | `PRAG` | `251121828` | `51` | `251111100` | Supported |
+| Pragmata | `PRAG` | `251121828` | `51` | `251111100` | Supported import, experimental same-topology export (see [docs/PRAGMATA.md](docs/PRAGMATA.md)) |
 | Resident Evil 9 / Requiem | `RE9` | `250925211` | `51` | `250813143` | Experimental |
 
 “Supported” means the corresponding format versions have importer mappings. It does not guarantee perfect reconstruction of every material, effect, animation or blend shape.
@@ -141,11 +142,27 @@ SF6 Costume Index: 2
 SF6 Color Index: 1
 ```
 
+## Pragmata
+
+Retail Pragmata character meshes use **`typing` 2** blend shapes (IEEE float16 xyz in the vertex-buffer tail), not MH Wilds packed 11/10/11 deltas. Extra-weight (vertex element type 7) is a second bone-index pack, not a 7th–12th influence.
+
+Export is an **experimental paste-back** of imported type-4 / type-7 / morph-aux tables. Blender cannot invent those streams.
+
+**Not supported:** remesh, retopo, dissolve, add/delete verts, or any vertex-count change; weight-paint / vertex-group edits (groups are ignored on write); `autoSolveRepeatedUVs` / `preserveSharpEdges` on a morphing face (they split verts and drop `pragmata_*`); exporting a face that was never imported with this persist path; building a new extra-weight or aux table from Blender data.
+
+**Allowed edits** (imported tables must still line up): move existing verts; reorder existing verts (`pragmata_src_index` permutation); edit shape-key **deltas**. Vertex count, armature, and the pasted streams must stay. Same-topology sculpt is the supported sculpt path because it is the only one that does not break those tables.
+
+Details, buffer layout, and approaches that fail: **[docs/PRAGMATA.md](docs/PRAGMATA.md)**.
+
 ## Known Limitations
 - Blender 5.1 is not currently supported
 - Monster Hunter Wilds support remains experimental
 - Static Pragmata MPLY environment geometry is supported but skinned MPLY clusters do not reconstruct joint weights yet
 - Pragmata hair uses its NROC maps and a primary anisotropic highlight approximation, parallax-coupled unique albedo and secondary hair lobes are not reconstructed
+- Pragmata face remesh, retopo, dissolve, add/delete verts, or any vertex-count change cannot round-trip extra-weight or morph aux (those tables cannot be invented)
+- Pragmata export pastes imported type-4/type-7 streams; vertex-group weight paint is not written
+- Pragmata `autoSolveRepeatedUVs` / `preserveSharpEdges` on a morphing face split verts and drop `pragmata_*` attributes
+- Pragmata face export requires a persist import (`pragmata_*` on the `.blend`); a mesh never imported with this path cannot round-trip extra-weight / aux
 - Blend-shape support varies by game and mesh format
 - SF6 blend shapes are kept at zero by default
 - Automatic SF6 JCNS pose-corrective drivers are disabled while their vertex mapping remains experimental

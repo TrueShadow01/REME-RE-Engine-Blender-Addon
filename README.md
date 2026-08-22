@@ -119,7 +119,7 @@ The following versions are explicitly recognized by the addon. Support can vary 
 | Onimusha 2 | `ONI2` | `240827123` | `46` | `240701001` | Limited validation |
 | Monster Hunter Wilds | `MHWILDS` | `241111606` | `45` | `241106027` | Experimental |
 | Monster Hunter Stories 3 | `MHS3` | `250604100` | `49` | `251111100` | Preliminary |
-| Pragmata | `PRAG` | `251121828` | `51` | `251111100` | Supported (mesh round-trip; see [docs/PRAGMATA.md](docs/PRAGMATA.md)) |
+| Pragmata | `PRAG` | `251121828` | `51` | `251111100` | Supported import, experimental same-topology export (see [docs/PRAGMATA.md](docs/PRAGMATA.md)) |
 | Resident Evil 9 / Requiem | `RE9` | `250925211` | `51` | `250813143` | Experimental |
 
 “Supported” means the corresponding format versions have importer mappings. It does not guarantee perfect reconstruction of every material, effect, animation or blend shape.
@@ -146,7 +146,7 @@ SF6 Color Index: 1
 
 Retail Pragmata character meshes use **`typing` 2** blend shapes (IEEE float16 xyz in the vertex-buffer tail), not MH Wilds packed 11/10/11 deltas. Extra-weight (vertex element type 7) is a second bone-index pack, not a 7th–12th influence.
 
-Export is a **paste-back** of imported type-4 / type-7 / morph-aux tables. Blender cannot invent those streams.
+Export is an **experimental paste-back** of imported type-4 / type-7 / morph-aux tables. Blender cannot invent those streams.
 
 **Not supported:** remesh, retopo, dissolve, add/delete verts, or any vertex-count change; weight-paint / vertex-group edits (groups are ignored on write); `autoSolveRepeatedUVs` / `preserveSharpEdges` on a morphing face (they split verts and drop `pragmata_*`); exporting a face that was never imported with this persist path; building a new extra-weight or aux table from Blender data.
 

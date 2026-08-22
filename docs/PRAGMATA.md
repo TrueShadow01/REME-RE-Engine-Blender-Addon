@@ -9,7 +9,7 @@ This document is the format note for the code under `modules/mesh/`. It is writt
 | Area | State |
 |---|---|
 | Import `.mesh.251121828` | Working. Positions, UVs, 6-bone weights, colors, armature, and `typing` 2 shape keys. |
-| Export (paste-back) | Working **only** if the mesh was imported with this addon so retail streams persist on the `.blend`. |
+| Export (paste-back) | **Experimental.** Works only if the mesh was imported with this addon so retail streams persist on the `.blend`. |
 | Allowed edits | Move existing verts; reorder existing verts (`pragmata_src_index` permutation); edit shape-key **deltas**. Count, armature, and pasted streams must stay. |
 | Remesh / change vertex count | **Not supported.** Extra-weight and morph aux cannot be invented. |
 | Materials / MDF reconstruction | Preliminary (`mdf2.51`). Pink/grey viewport is expected without extracted textures. |

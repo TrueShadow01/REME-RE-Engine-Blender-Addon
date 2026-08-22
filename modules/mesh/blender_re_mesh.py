@@ -29,6 +29,7 @@ from .file_re_mesh import (
     Sphere,
     meshFileVersionToGameNameDict,
     readREMesh,
+    validatePragmataSourceIndices,
     writeREMesh,
 )
 from .re_mesh_export_errors import addErrorToDict, printErrorDict, showREMeshErrorWindow
@@ -204,11 +205,12 @@ def _permute_parsed_submesh(parsedSubMesh, perm):
 def applyPragmataExportOrderAndStreams(rawsubmesh, parsedSubMesh, nverts):
     """Restore retail vertex order from pragmata_src_index and collect raw streams.
 
-    Returns (weight16, extra16, aux16, map4) in the *exported* vertex order, or Nones.
+    Returns (weight16, extra16, aux16, map4, src) in exported vertex order.
     """
     mesh = rawsubmesh.data
     if len(mesh.vertices) != nverts:
-        return None, None, None, None
+        return None, None, None, None, None
+
     src = _prag_get_int_attr(mesh, PRAG_ATTR_SRC, nverts)
     perm = None
     if src is not None:
@@ -239,7 +241,7 @@ def applyPragmataExportOrderAndStreams(rawsubmesh, parsedSubMesh, nverts):
         ax = bytes(aarr[order].reshape(-1))
     if mp is not None:
         mp = np.ascontiguousarray(mp[order], dtype="<i4").tobytes()
-    return wt, ew, ax, mp
+    return wt, ew, ax, mp, src
 
 
 def assemblePragmataBlendAux(targetCollection, parsedMesh, streamChunks):
@@ -247,7 +249,9 @@ def assemblePragmataBlendAux(targetCollection, parsedMesh, streamChunks):
     if not streamChunks:
         return None
     col = _find_pragmata_collection(targetCollection)
-    weights, extras, auxes, maps = zip(*streamChunks)
+    weights, extras, auxes, maps, sources = zip(*streamChunks)
+    storedVertexCount = col.get(PRAG_COL_NVERTS) if col is not None else None
+    topologyValid, topologyError = validatePragmataSourceIndices(sources, storedVertexCount)
     if not any(weights) and not any(extras) and not any(auxes):
         return None
     if not all(weights) or not all(extras):
@@ -260,6 +264,8 @@ def assemblePragmataBlendAux(targetCollection, parsedMesh, streamChunks):
         "weight": b"".join(weights),
         "extraW": b"".join(extras),
         "nverts": sum(len(w) // 16 for w in weights),
+        "topologyValid": topologyValid,
+        "topologyError": topologyError,
     }
     if all(auxes) and all(m is not None for m in maps):
         extra = b""
@@ -2933,6 +2939,11 @@ def exportREMeshFile(filePath, options):
             for sm in viscon.subMeshList
         )
         auxInfo = getattr(parsedMesh, "pragmataBlendAux", None) or {}
+        if hasShapes and not auxInfo.get("topologyValid", False):
+            msg = auxInfo.get("topologyError") or "Pragmata face export requires the complete imported vertex topology"
+            print(msg)
+            showErrorMessageBox(msg)
+            return False
         if hasShapes and not (auxInfo.get("aux") and auxInfo.get("auxExtra")):
             msg = (
                 "Pragmata face export needs imported morph aux/map streams on the .blend "

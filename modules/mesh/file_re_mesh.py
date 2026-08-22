@@ -2445,6 +2445,47 @@ def _pragmataBlendShapeName(name):
         return "Neutral_geo_cbs." + name
     return name
 
+def validatePragmataSourceIndices(sourceChunks, storedVertexCount):
+    """Require imported vertex identities to survive as one exact permutation"""
+    try:
+        storedVertexCount = int(storedVertexCount)
+    except (TypeError, ValueError):
+        return False, "Pragmata imported vertex count is missing or invalid."
+
+    if storedVertexCount < 0:
+        return False, "Pragmata imported vertex count is invalid."
+
+    if not sourceChunks:
+        return False, "Pragmata source index attributes are missing."
+
+    arrays = []
+    for chunkIndex, chunk in enumerate(sourceChunks):
+        if chunk is None:
+            return False, f"Pragmata source index attribute is missing on submesh {chunkIndex}."
+
+        arr = np.asarray(chunk, dtype=np.int64).reshape(-1)
+        if arr.size:
+            localExpected = np.arange(
+                int(arr.min()),
+                int(arr.min()) + arr.size,
+                dtype=np.int64
+            )
+
+            if not np.array_equal(np.sort(arr), localExpected):
+                return False, f"Pragmata source indices on submesh {chunkIndex} are not a complete contiguous imported range."
+
+            arrays.append(arr)
+
+    combined = np.concatenate(arrays) if arrays else np.empty(0, dtype=np.int64)
+
+    if len(combined) != storedVertexCount:
+        return False, f"Pragmata vertex count changed: imported {storedVertexCount}, exporting {len(combined)}."
+
+    expected = np.arange(storedVertexCount, dtype=np.int64)
+    if not np.array_equal(np.sort(combined), expected):
+        return False, "Pragmata source indices contain missing, duplicate or out-of-range vertices."
+
+    return True, ""
 
 def capturePragmataBlendHeader(bsData):
     """Snapshot typing-2 BlendTarget grouping as JSON-friendly dicts.

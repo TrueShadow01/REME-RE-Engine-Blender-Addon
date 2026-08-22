@@ -193,6 +193,39 @@ class PragmataBlendTests(unittest.TestCase):
         target0_sub_ptr = struct.unpack_from("<Q", buf, 200)[0]
         self.assertEqual(target0_sub_ptr, 16 + 96)
 
+    def test_source_indices_accept_complete_reordered_permutation(self):
+        validate = self.file_re_mesh.validatePragmataSourceIndices
+        ok, error = validate(
+            [
+                np.array([2, 0, 1], dtype=np.int32),
+                np.array([4, 3], dtype=np.int32),
+            ],
+            5,
+        )
+
+        self.assertTrue(ok, error)
+
+    def test_source_indices_reject_changed_or_corrupt_topology(self):
+        validate = self.file_re_mesh.validatePragmataSourceIndices
+        invalidCases = [
+            ([None], 4),
+            ([np.array([0, 1, 2], dtype=np.int32)], 4),
+            ([np.array([0, 1, 1, 3], dtype=np.int32)], 4),
+            (
+                [
+                    np.array([0, 2], dtype=np.int32),
+                    np.array([1, 3], dtype=np.int32),
+                ],
+                4,
+            ),
+            ([np.array([0, 1, 2, 4], dtype=np.int32)], 4),
+        ]
+
+        for chunks, storedCount in invalidCases:
+            with self.subTest(chunks=chunks, storedCount=storedCount):
+                ok, error = validate(chunks, storedCount)
+                self.assertFalse(ok)
+                self.assertTrue(error)
 
 if __name__ == "__main__":
     unittest.main()

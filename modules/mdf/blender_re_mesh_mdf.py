@@ -216,6 +216,7 @@ SCOTTypes = set([
 	"SSSCavityOcclusionTranslucentMap",
 	])
 MiscMapTypes = set([
+	"DetailMask",
 	"SkinMap",
 	"HairOverMap",
 	#MHWILDS Minimap
@@ -878,11 +879,14 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 							textureNodeInfoList.append(("ALBD",textureType,imageList,outputPath))
 						elif textureType == "BaseMetalMap" or textureType == "BaseMetalMapArray":
 							textureNodeInfoList.append(("ALBM",textureType,imageList,outputPath))
-						elif textureType in ("BaseAlphaMap", "BaseColorAlphaMap", "DetailAlbedoMap", "PupilColorMap", "Tex_BaseColor"):
-							textureNodeInfoList.append(("ALBA",textureType,imageList,outputPath))
-							
-							#hasAlpha = True
-							#Capcom uses this type for things other than alpha :/
+						elif textureType == "DetailAlbedoMap":
+							useDetailAlbedoProperty = mdfMaterial.getPropertyDict().get("Use_DetailAlbedoMap")
+							if useDetailAlbedoProperty is not None and useDetailAlbedoProperty.propValue[0] == 0.0:
+								textureNodeInfoList.append(("UNKN", textureType, imageList, outputPath))
+							else:
+								textureNodeInfoList.append(("ALBA", textureType, imageList, outputPath))
+						elif textureType in ("BaseAlphaMap", "BaseColorAlphaMap", "PupilColorMap", "Text_BaseColor"):
+							textureNodeInfoList.append(("ALBA", textureType, imageList, outputPath))
 						else:
 							textureNodeInfoList.append(("ALB",textureType,imageList,outputPath))
 						detectedAlbedo = True
@@ -1441,6 +1445,11 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 						MaskMapSeparateNode = nodes.new("ShaderNodeSeparateColor")
 						MaskMapSeparateNode.location = (MaskMapNode.location[0] + 300,MaskMapNode.location[1])
 						links.new(MaskMapNode.outputs["Color"],MaskMapSeparateNode.inputs["Color"])
+					elif "DetailMask" in matInfo["textureNodeDict"]:
+						MaskMapNode = matInfo["textureNodeDict"]["DetailMask"]
+						MaskMapSeparateNode = nodes.new("ShaderNodeSeparateColor")
+						MaskMapSeparateNode.location = (MaskMapNode.location[0] + 300, MaskMapNode.location[1])
+						links.new(MaskMapNode.outputs["Color"], MaskMapSeparateNode.inputs["Color"])
 					elif "DetailMaskMap" in matInfo["textureNodeDict"]:
 						MaskMapNode = matInfo["textureNodeDict"]["DetailMaskMap"]
 						MaskMapSeparateNode = nodes.new("ShaderNodeSeparateColor")
@@ -1520,26 +1529,30 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 						elif "Detail_Normal_Intensity" in matInfo["mPropDict"]:
 							detailNormalBlendNode = addPropertyNode(matInfo["mPropDict"]["Detail_Normal_Intensity"], matInfo["currentPropPos"], nodeTree)
 							links.new(detailNormalBlendNode.outputs["Value"],multiplyNormalBlendNode.inputs[1])
+						elif "DetailMap_NormalBlend" in matInfo["mPropDict"]:
+							detailNormalBlendNode = addPropertyNode(matInfo["mPropDict"]["DetailMap_NormalBlend"], matInfo["currentPropPos"], nodeTree)
+							links.new(detailNormalBlendNode.outputs["Value"], multiplyNormalBlendNode.inputs[1])
+
 						currentPos[0]+= 300
-						
-						if "Detail_RoughnessBlend" in matInfo["mPropDict"]:
-							currentPos[1]-= 300
-							detailRoughnessBlendNode = addPropertyNode(matInfo["mPropDict"]["Detail_RoughnessBlend"], matInfo["currentPropPos"], nodeTree)
-							
+						detailRoughnessBlendProperty = matInfo["mPropDict"].get("Detail_RoughnessBlend")
+
+						if detailRoughnessBlendProperty is None:
+							detailRoughnessBlendProperty = matInfo["mPropDict"].get("DetailMap_RoughnessBlend")
+						if detailRoughnessBlendProperty is not None:
+							currentPos[1] -= 300
+							detailRoughnessBlendNode = addPropertyNode(detailRoughnessBlendProperty, matInfo["currentPropPos"], nodeTree)
 							multiplyRoughnessBlendNode = nodes.new("ShaderNodeMath")
 							multiplyRoughnessBlendNode.location = currentPos
 							multiplyRoughnessBlendNode.operation = "MULTIPLY"
 							links.new(detailRoughnessBlendNode.outputs["Value"],multiplyRoughnessBlendNode.inputs[0])
 							links.new(MaskMapSeparateNode.outputs["Red"],multiplyRoughnessBlendNode.inputs[1])
 							currentPos[0]+= 300
-							
 							roughnessDistanceMulitplyNode = nodes.new("ShaderNodeMath")
 							roughnessDistanceMulitplyNode.location = currentPos
 							roughnessDistanceMulitplyNode.operation = "MULTIPLY"
 							links.new(multiplyRoughnessBlendNode.outputs["Value"],roughnessDistanceMulitplyNode.inputs[0])
 							roughnessDistanceMulitplyNode.inputs[1].default_value = 1.0
 							currentPos[0]+= 300
-							
 							roughnessCorrectionNode = nodes.new("ShaderNodeMath")#Can't seem to get roughness values to match in game, so an approximation is used here
 							roughnessCorrectionNode.location = currentPos
 							roughnessCorrectionNode.operation = "ADD"
@@ -1548,35 +1561,32 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 							roughnessCorrectionNode.inputs[1].default_value = 0.4
 							currentPos[0]+= 300
 							matInfo["roughnessNodeLayerGroup"].addMixLayer(roughnessCorrectionNode.outputs["Value"],factorOutSocket = roughnessDistanceMulitplyNode.outputs["Value"],mixType = "MULTIPLY",mixFactor = 1.0)
-						if "Detail_Cavity" in matInfo["mPropDict"]:
-							currentPos[1]-= 300
-							detailCavityNode = addPropertyNode(matInfo["mPropDict"]["Detail_Cavity"], matInfo["currentPropPos"], nodeTree)
-							
+
+						detailCavityProperty = matInfo["mPropDict"].get("Detail_Cavity")
+						if detailCavityProperty is None:
+							detailCavityProperty = matInfo["mPropDict"].get("DetailMap_CavityBlend")
+						if detailCavityProperty is not None:
+							currentPos[1] -= 300
+							detailCavityNode = addPropertyNode(detailCavityProperty, matInfo["currentPropPos"], nodeTree)
 							multiplyCavityNode = nodes.new("ShaderNodeMath")
 							multiplyCavityNode.location = currentPos
 							multiplyCavityNode.operation = "MULTIPLY"
 							links.new(detailCavityNode.outputs["Value"],multiplyCavityNode.inputs[0])
 							links.new(MaskMapSeparateNode.outputs["Red"],multiplyCavityNode.inputs[1])
-							
 							currentPos[0]+= 300
-							
 							cavityDistanceMulitplyNode = nodes.new("ShaderNodeMath")
 							cavityDistanceMulitplyNode.location = currentPos
 							cavityDistanceMulitplyNode.operation = "MULTIPLY"
 							links.new(multiplyCavityNode.outputs["Value"],cavityDistanceMulitplyNode.inputs[0])
 							cavityDistanceMulitplyNode.inputs[1].default_value = 1.0
 							currentPos[0]+= 300
-							
 							matInfo["cavityNodeLayerGroup"].addMixLayer(MaskMapSeparateNode.outputs["Blue"],factorOutSocket = cavityDistanceMulitplyNode.outputs["Value"],mixType = "MULTIPLY",mixFactor = 1.0)
-						
+
 					links.new(normalInfluenceNode.outputs["Value"],detailNormalNode.inputs["Strength"])
 					links.new(nodeGroupNode.outputs["Color"],detailNormalNode.inputs["Color"])
 					matInfo["detailNormalSocket"] = detailNormalNode.outputs["Normal"]
-				
-				
+
 				#Texture map overrides
-				
-				
 				
 				if "BaseColor" in matInfo["mPropDict"]:
 					baseColorNode = addPropertyNode(matInfo["mPropDict"]["BaseColor"], matInfo["currentPropPos"], nodeTree)
@@ -1584,7 +1594,6 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 				
 				if "Sheen" in matInfo["mPropDict"]:
 					sheenNode = addPropertyNode(matInfo["mPropDict"]["Sheen"], matInfo["currentPropPos"], nodeTree)
-					
 					
 					reduceSheenMultNode = nodeTree.nodes.new('ShaderNodeMath')
 					reduceSheenMultNode.location = sheenNode.location + Vector((300,0))

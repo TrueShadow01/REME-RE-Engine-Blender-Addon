@@ -885,7 +885,7 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 								textureNodeInfoList.append(("UNKN", textureType, imageList, outputPath))
 							else:
 								textureNodeInfoList.append(("ALBA", textureType, imageList, outputPath))
-						elif textureType in ("BaseAlphaMap", "BaseColorAlphaMap", "PupilColorMap", "Text_BaseColor"):
+						elif textureType in ("BaseAlphaMap", "BaseColorAlphaMap", "PupilColorMap", "Tex_BaseColor"):
 							textureNodeInfoList.append(("ALBA", textureType, imageList, outputPath))
 						else:
 							textureNodeInfoList.append(("ALB",textureType,imageList,outputPath))

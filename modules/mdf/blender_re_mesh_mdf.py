@@ -147,8 +147,10 @@ alphaTypeSet = set([
 	"AlphaMaskMap",
 	"AlphaMaskTex",
 	"AlphaTex",
-
 	])
+occlusionTypeSet = set([
+	"OcclusionMap",
+])
 cmmTypeSet = set([
 	"UserColorchangeMap",
 	"ColormaskMap",
@@ -280,6 +282,7 @@ usedTextureSet.update(cmaskTypeSet)
 usedTextureSet.update(emissionTypeSet)
 usedTextureSet.update(normalTypeSet)
 usedTextureSet.update(alphaTypeSet)
+usedTextureSet.update(occlusionTypeSet)
 usedTextureSet.update(ATOSTypes)
 usedTextureSet.update(OCTDTypes)
 usedTextureSet.update(SCOTTypes)
@@ -902,6 +905,8 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 					elif textureType in alphaTypeSet:
 						textureNodeInfoList.append(("ALP",textureType,imageList,outputPath))
 						hasAlpha = True
+					elif textureType in occlusionTypeSet:
+						textureNodeInfoList.append(("OCC", textureType, imageList, outputPath))
 					elif textureType in cmmTypeSet:
 						textureNodeInfoList.append(("CMM",textureType,imageList,outputPath))
 					elif textureType in cmaskTypeSet:

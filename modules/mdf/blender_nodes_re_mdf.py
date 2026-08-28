@@ -2370,6 +2370,65 @@ def newOCTDNode (nodeTree,textureType,matInfo):
 	
 	return imageNode
 
+def newOCCNode(nodeTree, textureType, matInfo):
+	imageNode = nodeTree.nodes[textureType]
+	currentPos = [imageNode.location[0] + 300, imageNode.location[1]]
+
+	useSecondaryUVProp = matInfo["mPropDict"].get("OcclusionMap_UseSecondaryUV")
+	if useSecondaryUVProp is not None:
+		useSecondaryUVNode = addPropertyNode(
+			useSecondaryUVProp,
+			matInfo["currentPropPos"],
+			nodeTree
+		)
+
+		uvMap1Node = nodeTree.nodes.get("UVMap1Node")
+		uvMap2Node = nodeTree.nodes.get("UVMap2Node")
+
+		if uvMap1Node is not None and uvMap2Node is not None:
+			uvMappingGroupNode = getDualUVMappingNodeGroup(nodeTree)
+			uvMappingGroupNode.location = currentPos
+
+			nodeTree.links.new(uvMap1Node.outputs["UV"], uvMappingGroupNode.inputs["UV1"])
+			nodeTree.links.new(uvMap2Node.outputs["UV"], uvMappingGroupNode.inputs["UV2"])
+			nodeTree.links.new(useSecondaryUVNode.outputs["Value"], uvMappingGroupNode.inputs["UseSecondaryUV"])
+			nodeTree.links.new(uvMappingGroupNode.outputs["Vector"], imageNode.inputs["Vector"])
+
+			currentPos[0] += 300
+
+	separateNode = nodeTree.nodes.new("ShaderNodeSeparateColor")
+	separateNode.name = f"{textureType} Channels"
+	separateNode.location = currentPos
+	nodeTree.links.new(imageNode.outputs["Color"], separateNode.inputs["Color"])
+
+	occlusionSocket = separateNode.outputs["Red"]
+
+	intensityProp = matInfo["mPropDict"].get("Occlusion_Intensity")
+	if intensityProp is not None:
+		intensityNode = addPropertyNode(
+			intensityProp,
+			matInfo["currentPropPos"],
+			nodeTree
+		)
+
+		intensityMixNode = nodeTree.nodes.new("ShaderNodeMixRGB")
+		intensityMixNode.name = "Occlusion Intensity"
+		intensityMixNode.location = [currentPos[0] + 300, currentPos[1]]
+		intensityMixNode.inputs["Color1"].default_value = (
+			1.0,
+			1.0,
+			1.0,
+			1.0
+		)
+
+		nodeTree.links.new(intensityNode.outputs["Value"], intensityMixNode.inputs["Fac"])
+		nodeTree.links.new(occlusionSocket, intensityMixNode.inputs["Color2"])
+
+		occlusionSocket = intensityMixNode.outputs["Color"]
+
+	matInfo["aoNodeLayerGroup"].addMixLayer(occlusionSocket)
+	return imageNode
+
 def newSCOTNode (nodeTree,textureType,matInfo):
 	imageNode = nodeTree.nodes[textureType]
 	currentPos = [imageNode.location[0]+300,imageNode.location[1]]
@@ -2463,6 +2522,7 @@ nodeDict = {
 	"EMI":newEMINode,
 	"ATOS":newATOSNode,
 	"OCTD":newOCTDNode,
+	"OCC":newOCCNode,
 	"SCOT":newSCOTNode,
 	"NAM":newNAMNode,
 	"SRM":newSRMNode,

@@ -238,6 +238,10 @@ MiscMapTypes = set([
 	#"Detail_NRRH_B",
 	#"Detail_NRRH_A",
 	])
+re9LeatherDetailTypeSet = set([
+	"DetailMapArray",
+	"DetailMask_Leather",
+])
 sf6DetailMaskTypeSet = set([
 	"Body_DetailBlendMask",
 	"Cloth_DetailMask",
@@ -835,8 +839,10 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 						autoDetectedAlbedo = True
 						detectedAlbedo = True
 				
-				isUsedTexture = textureType in usedTextureSet or (
-					gameName == "SF6" and textureType in sf6FacialWrinkleTypeSet
+				isUsedTexture = (
+					textureType in usedTextureSet
+					or (gameName == "SF6" and textureType in sf6FacialWrinkleTypeSet)
+					or (gameName == "RE9" and textureType in re9LeatherDetailTypeSet)
 				)
 				if gameName == "SF6" and not isUsedTexture and not autoDetectedAlbedo and DEBUG_MODE:
 					print(f"[SF6 MDF] skipped texture binding: material={materialName}, type={textureType}, path={texture}")
@@ -1430,9 +1436,11 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 				#MHWilds detail map
 				#TODO - will come back to this
 				
-				#RE4 detail map
-				if "DetailMap" in matInfo["textureNodeDict"] and matInfo["gameName"] != "PRAG":
-					detailMapNode = matInfo["textureNodeDict"]["DetailMap"]
+				detailMapNode = matInfo["textureNodeDict"].get("DetailMap")
+				if detailMapNode is None and matInfo["gameName"] == "RE9":
+					detailMapNode = matInfo["textureNodeDict"].get("DetailMapArray")
+
+				if detailMapNode is not None and matInfo["gameName"] != "PRAG":
 					currentPos = [detailMapNode.location[0]+300,detailMapNode.location[1]]
 					
 					#R Normal X
@@ -1447,6 +1455,11 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 						links.new(MaskMapNode.outputs["Color"],MaskMapSeparateNode.inputs["Color"])
 					elif "DetailMask" in matInfo["textureNodeDict"]:
 						MaskMapNode = matInfo["textureNodeDict"]["DetailMask"]
+						MaskMapSeparateNode = nodes.new("ShaderNodeSeparateColor")
+						MaskMapSeparateNode.location = (MaskMapNode.location[0] + 300, MaskMapNode.location[1])
+						links.new(MaskMapNode.outputs["Color"], MaskMapSeparateNode.inputs["Color"])
+					elif matInfo["gameName"] == "RE9" and "DetailMask_Leather" in matInfo["textureNodeDict"]:
+						MaskMapNode = matInfo["textureNodeDict"]["DetailMask_Leather"]
 						MaskMapSeparateNode = nodes.new("ShaderNodeSeparateColor")
 						MaskMapSeparateNode.location = (MaskMapNode.location[0] + 300, MaskMapNode.location[1])
 						links.new(MaskMapNode.outputs["Color"], MaskMapSeparateNode.inputs["Color"])

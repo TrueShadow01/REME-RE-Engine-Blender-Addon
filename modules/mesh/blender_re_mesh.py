@@ -1143,6 +1143,7 @@ def importLODGroup(
                         vertexColor0List=subMesh.colorList,
                         UV0List=subMesh.uvList,
                         UV1List=subMesh.uv2List,
+                        UV2List=subMesh.uv3List,
                         boneNameList=boneNameList,
                         vertexGroupWeightList=subMesh.weightList,
                         vertexGroupBoneIndicesList=subMesh.weightIndicesList,

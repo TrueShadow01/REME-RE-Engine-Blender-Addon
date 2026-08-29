@@ -236,7 +236,9 @@ BufferReadDict = {
 	"UV2": ReadUVBuffer,
 	"Weight": ReadWeightBuffer,
 	"Color": ReadColorBuffer,
-	"SF6UnknownVertexDataType": lambda buf, tags: None,
+	"SF6UnknownVertexDataType": lambda buf, tags: (
+		ReadUVBuffer(buf, tags) if "RE9UV3" in tags else None
+	),
 	"SecondaryWeight": ReadWeightBuffer,
 	"ExtraWeight": ReadWeightBuffer,
 }
@@ -351,6 +353,7 @@ class SubMesh:
 		self.tangentList = []
 		self.uvList = []
 		self.uv2List = []
+		self.uv3List = []
 		self.faceList = []
 		self.weightList = []
 		self.weightIndicesList = []
@@ -937,6 +940,8 @@ def parseLODStructure(
 					submesh.uv2List = vertexDictList[meshInfo.vertexBufferIndex]["UV2"][
 						meshInfo.vertexStartIndex : bufferEnd
 					]
+				if vertexDictList[meshInfo.vertexBufferIndex]["SF6UnknownVertexDataType"] is not None:
+					submesh.uv3List = vertexDictList[meshInfo.vertexBufferIndex]["SF6UnknownVertexDataType"][meshInfo.vertexStartIndex:bufferEnd]
 				if vertexDictList[meshInfo.vertexBufferIndex]["Weight"] is not None:
 					submesh.weightIndicesList = vertexDictList[
 						meshInfo.vertexBufferIndex
@@ -1230,6 +1235,8 @@ class ParsedREMesh:
 		# Parse Vertex Buffer
 		if reMesh.meshBufferHeader is not None:
 			tags = set()
+			if reMesh.meshVersion == VERSION_RE9:
+				tags.add("RE9UV3")
 			if (
 				reMesh.meshVersion in SIX_WEIGHT_MESH_VERSIONS
 				or reMesh.fileHeader.version == 250707828

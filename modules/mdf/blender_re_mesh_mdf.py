@@ -1056,6 +1056,11 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 			UVMap2Node.name = "UVMap2Node"
 			UVMap2Node.location = (-800,600)
 			UVMap2Node.uv_map = "UVMap1"
+
+			UV3MapNode = nodes.new("ShaderNodeUVMap")
+			UV3MapNode.name = "UVMap3Node"
+			UV3MapNode.location = (-800, 300)
+			UV3MapNode.uv_map = "UVMap2"
 			
 			blenderMaterial.use_backface_culling = useBackfaceCulling and not (matInfo["flags"].BaseTwoSideEnable == 1 or matInfo["flags"].TwoSideEnable == 1)
 			
@@ -1432,6 +1437,11 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 						matInfo["disableAO"] = True#TODO Figure out what's wrong with secondary UV hair AO
 					if "SecondaryBaseColorMap" in matInfo["textureNodeDict"]:
 						secondaryBaseColorNode = matInfo["textureNodeDict"]["SecondaryBaseColorMap"]
+
+						useTertiaryUVProp = matInfo["mPropDict"].get("Use_TertiaryUV")
+						if useTertiaryUVProp is not None and useTertiaryUVProp.propValue[0] > 0.0:
+							links.new(UV3MapNode.outputs["UV"], secondaryBaseColorNode.inputs["Vector"])
+
 						matInfo["albedoNodeLayerGroup"].addMixLayer(secondaryBaseColorNode.outputs["Color"],factorOutSocket = None,mixType = "MULTIPLY",mixFactor = 1.0)
 				#MHWilds detail map
 				#TODO - will come back to this

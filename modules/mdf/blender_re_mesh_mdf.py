@@ -885,6 +885,12 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 							textureNodeInfoList.append(("ALBD",textureType,imageList,outputPath))
 						elif textureType == "BaseMetalMap" or textureType == "BaseMetalMapArray":
 							textureNodeInfoList.append(("ALBM",textureType,imageList,outputPath))
+						elif gameName == "RE9" and textureType == "SecondaryBaseColorMap":
+							useSecondaryProp = mdfMaterial.getPropertyDict().get("UseSecondaryBaseColorMap")
+							if useSecondaryProp is not None and useSecondaryProp.propValue[0] <= 0.0:
+								textureNodeInfoList.append(("UNKN", textureType, imageList, outputPath))
+							else:
+								textureNodeInfoList.append(("ALB", textureType, imageList, outputPath))
 						elif textureType == "DetailAlbedoMap":
 							useDetailAlbedoProperty = mdfMaterial.getPropertyDict().get("Use_DetailAlbedoMap")
 							if useDetailAlbedoProperty is not None and useDetailAlbedoProperty.propValue[0] == 0.0:
@@ -1435,7 +1441,8 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 				if matInfo["gameName"] == "RE9":
 					if "ch_hair" in matInfo["mmtrName"]:
 						matInfo["disableAO"] = True#TODO Figure out what's wrong with secondary UV hair AO
-					if "SecondaryBaseColorMap" in matInfo["textureNodeDict"]:
+					useSecondaryProp = matInfo["mPropDict"].get("UseSecondaryBaseColorMap")
+					if "SecondaryBaseColorMap" in matInfo["textureNodeDict"] and (useSecondaryProp is None or useSecondaryProp.propValue[0] > 0.0):
 						secondaryBaseColorNode = matInfo["textureNodeDict"]["SecondaryBaseColorMap"]
 
 						useTertiaryUVProp = matInfo["mPropDict"].get("Use_TertiaryUV")

@@ -1443,6 +1443,20 @@ def importMDF(mdfFile,meshMaterialDict,loadUnusedTextures,loadUnusedProps,useBac
 							links.new(UV3MapNode.outputs["UV"], secondaryBaseColorNode.inputs["Vector"])
 
 						matInfo["albedoNodeLayerGroup"].addMixLayer(secondaryBaseColorNode.outputs["Color"],factorOutSocket = None,mixType = "MULTIPLY",mixFactor = 1.0)
+
+					if "ch_shellfur" in matInfo["mmtrName"]:
+						furDepthColorProp = matInfo["mPropDict"].get("Fur_DepthColor")
+						furDepthColorMapEnabledProp = matInfo["mPropDict"].get("Fur_DepthColorMap_Enable")
+
+						if furDepthColorProp is not None and (furDepthColorMapEnabledProp is None or furDepthColorMapEnabledProp.propValue[0] <= 0.0):
+							furDepthColorNode = addPropertyNode(
+								furDepthColorProp,
+								matInfo["currentPropPos"],
+								nodeTree
+							)
+
+							matInfo["albedoNodeLayerGroup"].addMixLayer(furDepthColorNode.outputs["Color"], factorOutSocket=None, mixType="MULTIPLY", mixFactor=1.0)
+
 				#MHWilds detail map
 				#TODO - will come back to this
 				

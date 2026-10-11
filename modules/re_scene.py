@@ -299,13 +299,20 @@ class ImportRESCN(bpy.types.Operator, ImportHelper):
     bl_options = {"REGISTER", "UNDO"}
     filename_ext = ".scn.20"
     filter_glob: StringProperty(default="*.scn.20", options={"HIDDEN"})
-    schema_path: StringProperty(name="RE2 RT RSZ JSON", default=r"D:\RE2Extract\rszre2rt.json")
-    extract_root: StringProperty(name="Extracted natives/stm", default=r"D:\RE2Extract\natives\stm")
-    load_materials: BoolProperty(name="Load Materials", default=False, description="Use REME's material importer. Texture conversion may create cache files")
+    extract_root: StringProperty(name="Extracted natives/stm", default="", description="Paste the path to your extracted natives/stm folder")
+    load_materials: BoolProperty(name="Load Materials", default=True, description="Use REME's material importer. Texture conversion may create cache files")
 
     def execute(self, context):
         try:
-            with open(bpy.path.abspath(self.schema_path), encoding="utf-8-sig") as stream:
+            extract_root = self.extract_root.strip().strip('"')
+            if not extract_root:
+                raise SceneError("Enter the extracted natives/stm folder")
+
+            schema_path = Path(__file__).resolve().parents[1] / "data" / "rsz" / "rszre2rt.json"
+            if not schema_path.is_file():
+                raise SceneError(f"Bundled RSZ schema not found: {schema_path}")
+    
+            with schema_path.open(encoding="utf-8-sig") as stream:
                 schema = json.load(stream)
             collection, warnings, ignored = import_scene(self.filepath, schema, bpy.path.abspath(self.extract_root), self.load_materials)
         except Exception as error:

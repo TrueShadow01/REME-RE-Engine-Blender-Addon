@@ -89,7 +89,7 @@ from .modules.mdf.ui_re_mdf_panels import (
     OBJECT_PT_MDFObjectModePanel,
 )
 from .modules.mesh.blender_re_mesh import exportREMeshFile, importREMeshFile
-
+from .modules.re_scene import ImportRESCN
 # mesh
 from .modules.mesh.file_re_mesh import meshFileVersionToGameNameDict
 from .modules.mesh.re_mesh_export_errors import (
@@ -2047,6 +2047,7 @@ classes = [
     OBJECT_PT_REModWorkspacePanel,
     # mesh
     ImportREMesh,
+    ImportRESCN,
     ExportREMesh,
     WM_OT_DeleteLoose,
     WM_OT_RenameMeshToREFormat,
@@ -2246,6 +2247,9 @@ class IMPORT_MT_re_mesh_editor_community(bpy.types.Menu):
 
         layout.operator(
             ImportREMesh.bl_idname, text="RE Mesh (.mesh.x) (Model)", icon="MESH_DATA"
+        )
+        layout.operator(
+            ImportRESCN.bl_idname, text="RE2 RT Scene (.scn.20)", icon="OUTLINER_COLLECTION"
         )
         layout.operator(
             ImportREMDF.bl_idname, text="RE MDF (.mdf2.x) (Materials)", icon="MATERIAL"

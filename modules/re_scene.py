@@ -249,11 +249,35 @@ def import_scene(path, schema, root, materials=False):
             assets[key] = prototype
 
         for index, key in placements:
-            obj = bpy.data.objects.new(nodes[index]["name"] + " [mesh]", None)
-            collection.objects.link(obj)
-            obj.instance_type = "COLLECTION"
-            obj.instance_collection = assets[key]
-            obj.parent = objects[index]
+            prototype = assets[key]
+            copies = {}
+            for source in prototype.objects:
+                obj = source.copy()
+                obj.name = nodes[index]["name"] + " | " + source.name
+                obj["RE_SCN_INDEX"] = index
+                collection.objects.link(obj)
+                copies[source] = obj
+
+            for source, obj in copies.items():
+                if source.parent in copies:
+                    obj.parent = copies[source.parent]
+                    obj.matrix_parent_inverse = source.matrix_parent_inverse.copy()
+                    obj.matrix_basis = source.matrix_basis.copy()
+                else:
+                    obj.parent = objects[index]
+                    obj.matrix_parent_inverse.identity()
+                    obj.matrix_basis = source.matrix_world.copy()
+
+                for modifier in obj.modifiers:
+                    if modifier.type == "ARMATURE" and modifier.object in copies:
+                        modifier.object = copies[modifier.object]
+
+        # Geometry and materials remain shared by placed objects
+        # Remvoe only this import's temporary prototype objects/collections
+        for prototype in assets.values():
+            for source in list(prototype.objects):
+                bpy.data.objects.remove(source, do_unlink=True)
+            bpy.data.collections.remove(prototype)
 
         collection["RE_SCN_WARNINGS"] = json.dumps(warnings)
         collection["RE_SCN_IGNORED_COMPONENTS"] = json.dumps(dict(ignored))

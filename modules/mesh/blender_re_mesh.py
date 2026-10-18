@@ -2670,6 +2670,24 @@ def exportREMeshFile(filePath, options):
                                 currentVertIndex
                             ] = list(pad(secondaryWeightIndicesList, size=8, padding=0))
 
+                if gameName == "SF6" and parsedMesh.bufferHasWeight:
+                    unweightedVertexIndices = np.flatnonzero(
+                        ~np.any(parsedSubMesh.weightList > 0.0, axis=1)
+                    )
+                    if unweightedVertexIndices.size:
+                        indexPreview = ", ".join(
+                            str(i) for i in unweightedVertexIndices[:20]
+                        )
+                        if unweightedVertexIndices.size > 20:
+                            indexPreview += ", ..."
+                        addErrorToDict(
+                            errorDict,
+                            "SF6UnweightedVertices",
+                            f"{rawsubmesh.name}\n"
+                            f"Vertices without usable weights: {unweightedVertexIndices.size}\n"
+                            f"Evaluated vertex indices (zero-based): {indexPreview}"
+                        )
+
                 # MH Wilds-era blend shape (shape key) export. Whenever a submesh carries shape keys
                 # they are exported automatically as blend shapes (no user toggle); meshes without
                 # shape keys are unaffected. Read shape keys from the original object and store

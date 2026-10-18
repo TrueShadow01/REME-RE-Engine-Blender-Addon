@@ -2085,27 +2085,40 @@ def exportREMeshFile(filePath, options):
     boneVertDict = dict()
     shapeKeyBoneSet = set()  # DD2 secondary weights
 
-    # Pre-scan all LODs and meshes to gather every weighted bone used across the entire model
+    # Validate assigned vertex groups before creating temporary mesh clones
     if armatureObj is not None:
         armatureBoneDict = armatureObj.data.bones
         for lod in meshLODCollectionList:
             for obj in lod.objects:
-                if obj.type == "MESH" and not obj.get("MeshExportExclude"):
-                    if (
-                        options["selectedOnly"]
-                        and obj not in bpy.context.selected_objects
-                    ):
+                if obj.type != "MESH" or obj.get("MeshExportExclude"):
+                    continue
+                if options["selectedOnly"] and obj not in bpy.context.selected_objects:
+                    continue
+
+                eval_mesh = obj.evaluated_get(dg).data
+                assignedGroupIndices = {
+                    g.group for vertex in eval_mesh.vertices for g in vertex.groups
+                }
+                missingGroups = []
+                for vg in obj.vertex_groups:
+                    if vg.index not in assignedGroupIndices:
                         continue
-                    # Scan vertex groups that actually have weights
-                    eval_mesh = obj.evaluated_get(dg).data
-                    for vg in obj.vertex_groups:
-                        vgName = vg.name.removeprefix("SHAPEKEY_")
-                        if vgName in armatureBoneDict:
-                            if any(
-                                vg.index in [g.group for g in v.groups]
-                                for v in eval_mesh.vertices
-                            ):
-                                weightedBonesSet.add(vgName)
+                    boneName = vg.name.removeprefix("SHAPEKEY_")
+                    if boneName in armatureBoneDict:
+                        weightedBonesSet.add(boneName)
+                    else:
+                        missingGroups.append(f"Vertex group: {vg.name!r}, expected bone: {boneName!r}")
+
+                if missingGroups:
+                    addErrorToDict(errorDict, "VertexGroupBoneMissing", obj.name + "\n" + "\n".join(missingGroups))
+
+    if "VertexGroupBoneMissing" in errorDict:
+        # The armature copy already exists. Mesh clones have not been created yet
+        if exportArmatureData is not None:
+            bpy.data.armatures.remove(exportArmatureData)
+        printErrorDict(errorDict)
+        showREMeshErrorWindow(targetCollection.name, armatureObj, errorDict)
+        return False
 
     pragmataChunks = []
     for lodIndex, lod in enumerate(meshLODCollectionList):

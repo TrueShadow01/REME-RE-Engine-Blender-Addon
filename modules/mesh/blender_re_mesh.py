@@ -2365,6 +2365,7 @@ def exportREMeshFile(filePath, options):
                 vertexGroupIndexToRemapDict = {
                     vgroup.index: remapDict[vgroup.name.removeprefix("SHAPEKEY_")]
                     for vgroup in rawsubmesh.vertex_groups
+                    if vgroup.name.removeprefix("SHAPEKEY_") in remapDict
                 }
 
                 # DD2 shape key vertex group indices

@@ -121,6 +121,19 @@ def addErrorToDict(errorDict,errorType,objectName):
 			errorDict[errorType] = {"count":1,"objectSet":set()}
 		
 errorInfoDict = {
+"SF6UnweightedVertices": """SF6 Vertices have no usable Bone Weights
+Some vertices have no primary bone weights left after export filtering.
+Primary weights below 0.002 are discarded by the exporter.
+SHAPEKEY_ secondary groups do not replace primary bone weights.
+
+HOW TO FIX:
+_______________
+
+Assign the affected vertices to the intended bones and normalize their weights.
+Each vertex needs at least one primary weight of 0.002 or greater.
+The listed indices refer to the evaluated mesh after export modifiers and splits.
+If topology is unchanged, these match the original mesh vertex indices.
+""",
 "VertexGroupBoneMissing": """Vertex Group Has No Matching Bone
 An assigned vertex group has no matching bone on the export armature.
 The affected mesh, vertex group and expected bone are listed below.

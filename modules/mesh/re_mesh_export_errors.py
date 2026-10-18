@@ -121,6 +121,20 @@ def addErrorToDict(errorDict,errorType,objectName):
 			errorDict[errorType] = {"count":1,"objectSet":set()}
 		
 errorInfoDict = {
+"VertexGroupBoneMissing": """
+An assigned vertex group has no matching bone on the export armature.
+The affected mesh, vertex group and expected bone are listed below.
+
+HOW TO FIX:
+_______________
+
+Check that the intended armature is inside the target export collection.
+Correct the vertex group name or transfer its weights to the intended existing bone.
+If the missing bone is required, restore it from the correct source skeleton.
+Only remove a group if its assignments are genuinely unwanted.
+
+SHAPEKEY_ is a secondary-weight naming prefix, not evidence of mesh shape keys.
+""",
 "NoMeshesInCollection":"""No Meshes In Collection
 No meshes were found in the target collection.
 	

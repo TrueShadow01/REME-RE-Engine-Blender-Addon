@@ -279,14 +279,6 @@ def importMDFFile(filePath,parentCollection = None):
 		materialObj.re_mdf_material.flags.bakeTextureArraySize = material.bakeTextureArraySize
 		
 		getMDFFlags(materialObj,material.flags,material.flagsB)
-		if gameName == "SF6":
-			for prop in material.propertyList:
-				if "CustomizeRoughness" in prop.propName or "CustomizeMetal" in prop.propName:#Fix for imported SF6 materials, this shouldn't matter in game since it gets overriden by the cmd files
-					if prop.propValue[0] == 0.0:
-						prop.propValue = [1.0]
-				elif "CustomizeColor"  in prop.propName:
-					if prop.propValue == [0.501960813999176, 0.501960813999176, 0.501960813999176, 1.0]:
-						prop.propValue = [1.0,1.0,1.0,1.0]
 		addPropsToPropList(materialObj,material.propertyList)
 		addTextureBindingsToBindingList(materialObj, material.textureList)
 		if material.mmtrsData != None:
@@ -502,15 +494,6 @@ def buildMDF(mdfCollectionName,mdfVersion = None):
 					
 					materialEntry.gpbfBufferNameList.append(nameEntry)
 					materialEntry.gpbfBufferPathList.append(pathEntry)
-			if mdfVersion == 31:#SF6
-			#Set altered customize values back to original values since some files do use them
-				for prop in materialEntry.propertyList:
-					if "CustomizeRoughness" in prop.propName or "CustomizeMetal" in prop.propName:
-						if prop.propValue[0] == 1.0:
-							prop.propValue = [0.0]
-					elif "CustomizeColor"  in prop.propName:
-						if prop.propValue == [1.0,1.0,1.0,1.0]:
-							prop.propValue = [0.501960813999176, 0.501960813999176, 0.501960813999176, 1.0]
 			newMDFFile.materialList.append(materialEntry)
 		return newMDFFile
 	else:

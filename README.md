@@ -113,7 +113,7 @@ The following versions are explicitly recognized by the addon. Support can vary 
 | Monster Hunter Rise / Sunbreak | `MHRSB` | `2109148288` | `23` | `28` | Supported |
 | Resident Evil 4 | `RE4` | `221108797` | `32` | `143221013` | Supported |
 | Street Fighter 6 | `SF6` | `230110883` | `31` | `241101895` | Supported |
-| Dragon's Dogma 2 | `DD2` | `231011879` / `240423143` | `40` | `760230703` | Supported |
+| Dragon's Dogma 2 | `DD2` | `231011879` / `240423143` / `260421070` | `40` / `51` | `760230703` | Supported |
 | Kunitsu-Gami | `KG` | `240306278` | `40` | `231106777` | Limited validation |
 | Dead Rising Deluxe Remaster | `DR` | `240424828` | `40` | `240606151` | Limited validation |
 | Onimusha 2 | `ONI2` | `240827123` | `46` | `240701001` | Limited validation |
@@ -167,11 +167,10 @@ Details, buffer layout, and approaches that fail: **[docs/PRAGMATA.md](docs/PRAG
 - SF6 blend shapes are kept at zero by default
 - Automatic SF6 JCNS pose-corrective drivers are disabled while their vertex mapping remains experimental
 - SF6 `FakeSqhereMap` eye reflections are not supported yet
-- Extreme FK poses may not match the game's deformation without pose-corrective shapes
-- The imported skeleton does not include custom IK or animator-facing controls
-- Blend-shape export is not guaranteed for every supported import path
 - Damage, sweat, animated muscle, cloth-wave and some auxiliary SF6 effects are not reconstructed
 - RE Asset Browser drag import currently supports `MESH` assets only and does not automatically extract files from game PAK archives
+- Updated DD2 `.mesh.260421070` support covers mesh geometry and skinning import. Shape-key import is skipped with a warning and export to this version is blocked.
+- Asset Browser version fallback locates files but does not add support for otherwise unsupported binary formats.
 
 ## Roadmap
 

@@ -227,6 +227,13 @@ meshFileVersionToGameNameDict = {
     251121828: "PRAG", # VERSION_PRAG
 }
 
+# Updated DD2 format, import support only
+VERSION_DD2_NEWEST = 145
+meshFileVersionToNewVersionDict[260421070] = VERSION_DD2_NEWEST
+newVersionToMeshFileVersion[VERSION_DD2_NEWEST] = 260421070
+meshFileVersionToInternalVersionDict[260421070] = 251205828
+internalVersionToMeshFileVersionDict[251205828] = 260421070
+meshFileVersionToGameNameDict[260421070] = "DD2"
 
 # Used for unmapped mesh versions, potentially allows for importing
 def getNearestRemapVersion(
@@ -907,7 +914,7 @@ class MeshBufferHeader:
         self.faceBuffer.extend(file.read(self.faceBufferSize))
 
         if self.sunbreakOffset != 0:
-            if version == VERSION_DD2 or version == VERSION_DD2NEW:
+            if version in (VERSION_DD2, VERSION_DD2NEW, VERSION_DD2_NEWEST):
                 # Limit this DD2 for now in case it happens to be used in other games for other things
                 file.seek(self.sunbreakOffset)
                 vertexCount = (
@@ -3878,6 +3885,11 @@ def readREMesh(filepath, lodTarget=None, importBlendShapes=IMPORT_BLEND_SHAPES):
     except:
         print("Unable to read mesh version from file path, assuming MHRSB")
         meshVersion = 2109148288  # MHRSB
+
+    if meshVersion == 260421070 and importBlendShapes:
+        raiseWarning("DD2 .260421070 shape key import is not implemented. Importing the base mesh.")
+        importBlendShapes = False
+    
     version = meshFileVersionToNewVersionDict.get(
         meshVersion, getNearestRemapVersion(meshVersion)
     )
@@ -3944,6 +3956,9 @@ def readREMesh(filepath, lodTarget=None, importBlendShapes=IMPORT_BLEND_SHAPES):
 
 
 def writeREMesh(reMeshFile, filepath):
+    if os.fspath(filepath).lower().endswith(".mesh.260421070"):
+        raise ValueError("DD2 .260421070 export is not implemented. This update supports import only.")
+
     print("Writing to " + filepath)
     try:
         file = open(filepath, "wb", buffering=8192)

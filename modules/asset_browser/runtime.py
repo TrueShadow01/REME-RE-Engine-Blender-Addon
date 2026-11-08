@@ -32,19 +32,44 @@ def _find_extracted_asset(asset, game_info, preferences):
         return None
     
     relative_path = relative_path.replace("/", os.sep).replace("\\", os.sep)
-    versioned_path = f"{relative_path}.{version}"
+    roots = [
+        bpy.path.abspath(entry.path)
+        for entry in preferences.chunkPathList_items
+        if entry.gameName == game_name
+    ]
 
-    for chunk_entry in preferences.chunkPathList_items:
-        if chunk_entry.gameName != game_name:
+    # Preserve exact version matches and configured chunk path precedence
+    if version is not None:
+        for root in roots:
+            candidate = os.path.join(root, f"{relative_path}.{version}")
+            print(f"RE Asset Browser - Checking: {candidate}")
+            if os.path.isfile(candidate):
+                return candidate
+
+    # Search only expected directory, retain file version
+    for root in roots:
+        base_path = os.path.join(root, relative_path)
+        directory, basename = os.path.split(base_path)
+        prefix = basename.casefold() + "."
+
+        try:
+            with os.scandir(directory) as entries:
+                matches = [
+                    entry.path
+                    for entry in entries
+                    if entry.is_file() and entry.name.casefold().startswith(prefix) and entry.name[len(prefix):].isascii() and entry.name[len(prefix):].isdigit()
+                ]
+        except FileNotFoundError:
             continue
 
-        candidate = os.path.join(bpy.path.abspath(chunk_entry.path), versioned_path)
+        if len(matches) > 1:
+            names = ", ".join(sorted(os.path.basename(path) for path in matches))
+            raise ValueError(f"Multiple versions found for {relative_path}: {names}. Use a chunk path containing the intended game build.")
 
-        print(f"RE Asset Browser - Checking: {candidate}")
+        if matches:
+            print(f"RE Asset Browser - Library version {version} is unavailable. Using extracted file: {matches[0]}")
+            return matches[0]
 
-        if os.path.isfile(candidate):
-            return candidate
-    
     return None
 
 def _delete_placeholder(object_name):
@@ -102,7 +127,7 @@ def asset_browser_import_post(import_context):
             _show_error([f"{asset_type} Asset Browser imports are not enabled yet.", "The first integration milestone supports MESH assets."])
     except Exception as error:
         print(f"RE Asset Browser import failed: {error}")
-        _show_error(["The RE Asset Browser import failed.", "Open Window > Toggle System Console for details."])
+        _show_error(["The RE Asset Browser import failed.", str(error), "Open Window > Toggle System Console for details."])
     finally:
         _queue_placeholder_deletion(placeholder_name)
 

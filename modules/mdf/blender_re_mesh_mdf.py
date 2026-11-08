@@ -474,6 +474,7 @@ def findMDFPathFromMeshPath(meshPath,gameName = None):
 		".230110883":".31",#SF6
 		".231011879":".40",#DD2
 		".240423143":".40",#DD2NEW
+		".260421070":".51",#DD2 updated format
 		".240424828":".40",#DR
 		".240820143":".45",#MHWILDS
 		".241111606":".45",#MHWILDS

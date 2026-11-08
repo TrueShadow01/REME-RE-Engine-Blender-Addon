@@ -1521,7 +1521,7 @@ def importREMeshFile(filePath, options):
                 ]:  # MDF gets read twice when importing mdf data, could fix it but reading is fast enough that it's not really noticable.
                     print("Loading MDF Data...")
                     try:
-                        importMDFFile(mdfPath, parentCollection=parentCollection)
+                        importMDFFile(mdfPath, parentCollection=parentCollection, gameName=gameName)
                     except Exception as err:
                         raiseWarning(
                             "Could not import MDF data from " + mdfPath + ":" + str(err)

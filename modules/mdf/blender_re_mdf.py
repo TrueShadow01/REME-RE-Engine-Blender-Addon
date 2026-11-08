@@ -233,12 +233,14 @@ def getMDFFlags(obj,flags,flagsB):
 #MDF IMPORT
 
 
-def importMDFFile(filePath,parentCollection = None):
+def importMDFFile(filePath,parentCollection = None,gameName = None):
 	mdfFile = readMDF(filePath)
 	mdfFileName = os.path.splitext(os.path.split(filePath)[1])[0]
 	try:
 		mdfVersion = int(os.path.splitext(filePath)[1].replace(".",""))
-		if mdfVersion in gameNameMDFVersionDict:
+		if gameName is not None:
+			bpy.context.scene.re_mdf_toolpanel.activeGame = gameName
+		elif mdfVersion in gameNameMDFVersionDict:
 			gameName = gameNameMDFVersionDict[mdfVersion]
 			if gameName in MDFGameNameConflictDict:
 				gameName = resolveMDFGameNameConflict(gameName, mdfFile, filePath)

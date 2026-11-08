@@ -28,7 +28,7 @@ def _find_extracted_asset(asset, game_info, preferences):
     relative_path = asset.get("assetPath", "")
     version = game_info.get("fileVersionDict", {}).get(f"{asset_type}_VERSION")
 
-    if not relative_path or not version:
+    if not relative_path:
         return None
     
     relative_path = relative_path.replace("/", os.sep).replace("\\", os.sep)
